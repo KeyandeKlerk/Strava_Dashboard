@@ -182,6 +182,92 @@ else:
 
 st.divider()
 
+# ── Aerobic Fitness Trend ─────────────────────────────────────────────────────
+st.subheader("Aerobic Fitness")
+
+z2_df = metrics.zone2_pace_trend(conn)
+
+if not z2_df.empty:
+    col_a, col_b = st.columns(2)
+
+    with col_a:
+        fig_z2 = px.scatter(
+            z2_df,
+            x="activity_date", y="pace_min_per_km",
+            trendline="ols",
+            title="Zone 2 Pace Trend (min/km) — lower is faster",
+            labels={"pace_min_per_km": "Pace (min/km)", "activity_date": "Date"},
+            hover_data=["name", "distance_km", "average_heartrate"],
+        )
+        fig_z2.update_yaxes(autorange="reversed")
+        fig_z2.update_layout(height=320)
+        st.plotly_chart(fig_z2, use_container_width=True)
+
+    with col_b:
+        fig_decoup = px.bar(
+            z2_df.tail(20),
+            x="activity_date", y="decoupling_pct",
+            title="Aerobic Decoupling % per Run (last 20)",
+            labels={"decoupling_pct": "Decoupling %", "activity_date": "Date"},
+            color="decoupling_pct",
+            color_continuous_scale=["green", "yellow", "red"],
+            range_color=[-5, 5],
+        )
+        fig_decoup.add_hline(y=5, line_dash="dash", line_color="red",
+                             annotation_text=">5% = poor aerobic efficiency")
+        fig_decoup.update_layout(height=320, showlegend=False)
+        st.plotly_chart(fig_decoup, use_container_width=True)
+else:
+    st.info("No streams data yet. Run `python src/backfill.py` to fetch detailed metrics for long runs.")
+
+st.divider()
+
+# ── Comrades Milestones ───────────────────────────────────────────────────────
+st.subheader("Comrades 2027 Milestones")
+
+ms = metrics.comrades_milestones(conn, race_distance_km=RACE_DISTANCE_KM)
+b2b_df = metrics.back_to_back_runs(conn)
+
+m1, m2, m3, m4 = st.columns(4)
+m1.metric(
+    "Longest Run",
+    f"{ms['longest_run_km']:.1f} km",
+    f"{ms['longest_run_pct_race']:.0f}% of race",
+)
+m2.metric(
+    "Best Back-to-Back",
+    f"{ms['max_b2b_km']:.1f} km" if ms["max_b2b_km"] else "—",
+    help="Combined distance of two consecutive long run days",
+)
+m3.metric(
+    "Descent Practiced",
+    f"{ms['total_descent_m']:.0f} m",
+    f"{ms['descent_pct_practiced']:.0f}% of {ms['race_descent_m']:.0f}m race descent",
+    help="Cumulative elevation loss from all runs. Comrades Down Run ≈ 1800m descent.",
+)
+m4.metric(
+    "Projected Finish",
+    f"{ms['projected_finish_h']:.2f} h" if ms["projected_finish_h"] else "—",
+    f"vs {ms['cutoff_h']:.0f}h cutoff",
+    delta_color="inverse",
+)
+
+if not b2b_df.empty:
+    st.dataframe(
+        b2b_df.head(10),
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "day1": st.column_config.DateColumn("Day 1"),
+            "day2": st.column_config.DateColumn("Day 2"),
+            "day1_km": st.column_config.NumberColumn("Day 1 (km)", format="%.1f"),
+            "day2_km": st.column_config.NumberColumn("Day 2 (km)", format="%.1f"),
+            "combined_km": st.column_config.NumberColumn("Combined (km)", format="%.1f"),
+        },
+    )
+
+st.divider()
+
 # ── Recent Activities ─────────────────────────────────────────────────────────
 st.subheader("Recent Activities")
 
