@@ -288,3 +288,31 @@ if not recent_df.empty:
     )
 else:
     st.info("No activities to display.")
+
+# ── Training Plan Editor ──────────────────────────────────────────────────────
+with st.expander("Training Plan (click to expand & edit)", expanded=False):
+    adh_df = metrics.plan_adherence(conn)
+
+    if not adh_df.empty:
+        st.dataframe(
+            adh_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "week_start_date": st.column_config.DateColumn("Week Start"),
+                "week_number": st.column_config.NumberColumn("Week #", format="%d"),
+                "phase": "Phase",
+                "planned_distance_km": st.column_config.NumberColumn("Planned (km)", format="%.1f"),
+                "actual_distance_km": st.column_config.NumberColumn("Actual (km)", format="%.1f"),
+                "adherence_pct": st.column_config.NumberColumn("Adherence %", format="%.1f"),
+                "is_deload": st.column_config.CheckboxColumn("Deload?"),
+            },
+        )
+    else:
+        st.info("Training plan is empty. Populate the training_plan table to track adherence.")
+
+    st.caption(
+        "To populate the plan: call `db.upsert_training_plan_week()` from a script "
+        "or import a CSV. The week-by-week targets are a separate follow-up task "
+        "once real data is flowing."
+    )
