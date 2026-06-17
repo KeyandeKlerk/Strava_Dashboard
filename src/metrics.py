@@ -1,0 +1,85 @@
+import duckdb
+import pandas as pd
+from typing import Optional
+
+RACE_DISTANCE_KM = 90.0
+
+
+def weekly_volume(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    return conn.execute("""
+        SELECT
+            DATE_TRUNC('week', start_date_local::DATE) AS week_start,
+            SUM(CASE WHEN category = 'running' THEN distance_km ELSE 0 END) AS run_distance_km,
+            SUM(CASE WHEN category = 'running' THEN elevation_gain_m ELSE 0 END) AS elevation_gain_m,
+            MAX(CASE WHEN category = 'running' THEN COALESCE(distance_km, 0) ELSE 0 END) AS longest_run_km,
+            SUM(CASE WHEN category = 'running' THEN moving_time_min ELSE 0 END) AS run_time_min,
+            SUM(moving_time_min) AS total_time_min,
+            COUNT(*) AS session_count,
+            7 - COUNT(DISTINCT start_date_local::DATE) AS rest_day_count
+        FROM activities
+        GROUP BY 1
+        ORDER BY 1 DESC
+    """).df()
+
+
+def weekly_category_load(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    return conn.execute("""
+        SELECT
+            DATE_TRUNC('week', start_date_local::DATE) AS week_start,
+            SUM(CASE WHEN category = 'running'    THEN load_score ELSE 0 END) AS running_load,
+            SUM(CASE WHEN category = 'volleyball' THEN load_score ELSE 0 END) AS volleyball_load,
+            SUM(CASE WHEN category = 'cricket'    THEN load_score ELSE 0 END) AS cricket_load,
+            SUM(CASE WHEN category = 'gym'        THEN load_score ELSE 0 END) AS gym_load,
+            SUM(load_score) AS total_load
+        FROM activities
+        GROUP BY 1
+        ORDER BY 1 DESC
+    """).df()
+
+
+def recent_activities(conn: duckdb.DuckDBPyConnection, n: int = 15) -> pd.DataFrame:
+    return conn.execute(f"""
+        SELECT
+            start_date_local::DATE AS date,
+            name,
+            category,
+            sport_type,
+            ROUND(distance_km, 1) AS distance_km,
+            ROUND(moving_time_min, 0) AS duration_min,
+            ROUND(elevation_gain_m, 0) AS elevation_m,
+            average_heartrate,
+            ROUND(load_score, 0) AS load_score
+        FROM activities
+        ORDER BY start_date_local DESC
+        LIMIT {n}
+    """).df()
+
+
+def current_week_stats(conn: duckdb.DuckDBPyConnection) -> dict:
+    row = conn.execute("""
+        SELECT
+            SUM(CASE WHEN category = 'running' THEN COALESCE(distance_km, 0) ELSE 0 END) AS run_km,
+            COUNT(*) AS sessions
+        FROM activities
+        WHERE DATE_TRUNC('week', start_date_local::DATE) = DATE_TRUNC('week', current_date)
+    """).fetchone()
+
+    plan_row = conn.execute("""
+        SELECT planned_distance_km, phase
+        FROM training_plan
+        WHERE week_start_date = DATE_TRUNC('week', current_date)::DATE
+        LIMIT 1
+    """).fetchone()
+
+    run_km = row[0] or 0.0
+    planned_km = plan_row[0] if plan_row else 0.0
+    phase = plan_row[1] if plan_row else "No plan loaded"
+    adherence_pct = (run_km / planned_km * 100) if planned_km > 0 else 0.0
+
+    return {
+        "run_distance_km": run_km,
+        "planned_km": planned_km,
+        "phase": phase,
+        "adherence_pct": adherence_pct,
+        "session_count": row[1] or 0,
+    }
