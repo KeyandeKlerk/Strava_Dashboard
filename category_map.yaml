@@ -1,0 +1,13 @@
+sport_type_map:
+  Run: running
+  TrailRun: running
+  VirtualRun: running
+  WeightTraining: gym
+  Workout: other
+
+name_keyword_overrides:
+  volleyball: volleyball
+  cricket: cricket
+  gym: gym
+  strength: gym
+  weights: gym
