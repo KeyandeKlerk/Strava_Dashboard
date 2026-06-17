@@ -6,7 +6,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from db import upsert_activity
+from db import upsert_activity, upsert_streams_derived
 import metrics
 
 
@@ -174,3 +174,59 @@ def test_plan_adherence_returns_dataframe(mem_conn):
     row = df[df["week_number"] == 1].iloc[0]
     assert row["actual_distance_km"] == pytest.approx(45.0)
     assert row["adherence_pct"] == pytest.approx(90.0)
+
+
+def _insert_run_with_streams(conn, activity_id, date_str, distance_km, avg_hr, avg_speed_kmh,
+                              pct_z2=55.0, decoupling=-1.5, loss_m=80.0, gap=5.8):
+    load = avg_hr * 0.5
+    moving_time_min = distance_km / avg_speed_kmh * 60
+    _insert_run(conn, activity_id, date_str, distance_km,
+                moving_time_min=moving_time_min, load_score=load)
+    conn.execute("""
+        UPDATE activities
+        SET average_heartrate = ?, average_speed_kmh = ?
+        WHERE id = ?
+    """, [avg_hr, avg_speed_kmh, activity_id])
+    upsert_streams_derived(conn, {
+        "activity_id": activity_id,
+        "elevation_loss_m": loss_m,
+        "decoupling_pct": decoupling,
+        "pct_time_z1": 5.0, "pct_time_z2": pct_z2, "pct_time_z3": 30.0,
+        "pct_time_z4": 8.0, "pct_time_z5": 2.0,
+        "grade_adjusted_pace": gap,
+        "cadence_avg": 172.5,
+    })
+
+
+def test_zone2_pace_trend_includes_mostly_z2_runs(mem_conn):
+    _insert_run_with_streams(mem_conn, 1, "2024-03-11T07:00:00", 15.0, 145.0, 10.5, pct_z2=60.0)
+    _insert_run_with_streams(mem_conn, 2, "2024-03-18T07:00:00", 16.0, 143.0, 10.8, pct_z2=65.0)
+    # Short run (<10km) — should be excluded
+    _insert_run(mem_conn, 3, "2024-03-20T07:00:00", 8.0)
+    df = metrics.zone2_pace_trend(mem_conn)
+    assert len(df) == 2
+
+
+def test_back_to_back_runs_finds_consecutive(mem_conn):
+    _insert_run(mem_conn, 1, "2024-03-16T07:00:00", 20.0)  # Saturday
+    _insert_run(mem_conn, 2, "2024-03-17T07:00:00", 16.0)  # Sunday
+    df = metrics.back_to_back_runs(mem_conn)
+    assert len(df) >= 1
+    assert df.iloc[0]["combined_km"] == pytest.approx(36.0)
+
+
+def test_back_to_back_excludes_non_consecutive(mem_conn):
+    _insert_run(mem_conn, 1, "2024-03-16T07:00:00", 20.0)  # Saturday
+    _insert_run(mem_conn, 2, "2024-03-18T07:00:00", 16.0)  # Monday — gap
+    df = metrics.back_to_back_runs(mem_conn)
+    assert len(df) == 0
+
+
+def test_comrades_milestones_returns_dict(mem_conn):
+    _insert_run_with_streams(mem_conn, 1, "2024-03-16T07:00:00", 30.0, 145.0, 10.0, loss_m=300.0)
+    result = metrics.comrades_milestones(mem_conn)
+    assert "longest_run_km" in result
+    assert "longest_run_pct_race" in result
+    assert "total_descent_m" in result
+    assert result["total_descent_m"] == pytest.approx(300.0)
+    assert result["longest_run_pct_race"] == pytest.approx(30.0 / 90.0 * 100, rel=0.01)

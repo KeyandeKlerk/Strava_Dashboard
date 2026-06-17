@@ -222,3 +222,101 @@ def current_week_stats(conn: duckdb.DuckDBPyConnection) -> dict:
         "adherence_pct": adherence_pct,
         "session_count": row[1] or 0,
     }
+
+
+def zone2_pace_trend(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    return conn.execute("""
+        SELECT
+            a.start_date_local::DATE AS activity_date,
+            a.name,
+            a.distance_km,
+            sd.pct_time_z2,
+            a.average_heartrate,
+            CASE WHEN a.average_speed_kmh > 0
+                THEN ROUND(60.0 / a.average_speed_kmh, 2)
+                ELSE NULL
+            END AS pace_min_per_km,
+            sd.grade_adjusted_pace,
+            sd.decoupling_pct,
+            sd.cadence_avg
+        FROM activities a
+        JOIN activity_streams_derived sd ON a.id = sd.activity_id
+        WHERE a.category = 'running'
+          AND sd.pct_time_z2 >= 50
+          AND a.distance_km >= 10
+        ORDER BY a.start_date_local
+    """).df()
+
+
+def back_to_back_runs(conn: duckdb.DuckDBPyConnection, min_km: float = 15.0) -> pd.DataFrame:
+    return conn.execute("""
+        WITH runs AS (
+            SELECT
+                start_date_local::DATE AS run_date,
+                distance_km
+            FROM activities
+            WHERE category = 'running'
+              AND distance_km >= ?
+        )
+        SELECT
+            r1.run_date AS day1,
+            r2.run_date AS day2,
+            r1.distance_km AS day1_km,
+            r2.distance_km AS day2_km,
+            r1.distance_km + r2.distance_km AS combined_km
+        FROM runs r1
+        JOIN runs r2 ON r2.run_date = r1.run_date + INTERVAL 1 DAY
+        ORDER BY r1.run_date DESC
+    """, [min_km]).df()
+
+
+def comrades_milestones(
+    conn: duckdb.DuckDBPyConnection,
+    race_distance_km: float = RACE_DISTANCE_KM,
+    race_descent_m: float = 1800.0,
+) -> dict:
+    longest_run = conn.execute(
+        "SELECT COALESCE(MAX(distance_km), 0) FROM activities WHERE category = 'running'"
+    ).fetchone()[0]
+
+    total_descent = conn.execute("""
+        SELECT COALESCE(SUM(sd.elevation_loss_m), 0)
+        FROM activities a
+        JOIN activity_streams_derived sd ON a.id = sd.activity_id
+        WHERE a.category = 'running'
+    """).fetchone()[0]
+
+    max_b2b = conn.execute("""
+        WITH runs AS (
+            SELECT start_date_local::DATE AS run_date, distance_km
+            FROM activities WHERE category = 'running'
+        )
+        SELECT COALESCE(MAX(r1.distance_km + r2.distance_km), 0)
+        FROM runs r1
+        JOIN runs r2 ON r2.run_date = r1.run_date + INTERVAL 1 DAY
+    """).fetchone()[0]
+
+    recent_pace_df = conn.execute("""
+        SELECT 60.0 / average_speed_kmh AS pace_min_km
+        FROM activities
+        WHERE category = 'running'
+          AND distance_km >= 25
+          AND average_speed_kmh > 0
+        ORDER BY start_date_local DESC
+        LIMIT 5
+    """).df()
+
+    avg_pace = float(recent_pace_df["pace_min_km"].mean()) if len(recent_pace_df) > 0 else None
+    projected_min = avg_pace * race_distance_km if avg_pace else None
+
+    return {
+        "longest_run_km": float(longest_run),
+        "longest_run_pct_race": round(float(longest_run) / race_distance_km * 100, 1),
+        "total_descent_m": float(total_descent),
+        "race_descent_m": race_descent_m,
+        "descent_pct_practiced": round(float(total_descent) / race_descent_m * 100, 1) if total_descent else 0.0,
+        "max_b2b_km": float(max_b2b),
+        "projected_finish_min": projected_min,
+        "projected_finish_h": round(projected_min / 60, 2) if projected_min else None,
+        "cutoff_h": 12.0,
+    }
