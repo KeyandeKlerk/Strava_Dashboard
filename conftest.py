@@ -12,4 +12,5 @@ from db import init_schema
 def mem_conn():
     conn = duckdb.connect(":memory:")
     init_schema(conn)
-    return conn
+    yield conn
+    conn.close()

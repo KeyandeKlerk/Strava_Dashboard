@@ -5,3 +5,10 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
+.DS_Store
+.vscode/
+.idea/
+*.log
+.coverage
+htmlcov/
+.streamlit/
