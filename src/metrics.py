@@ -3,10 +3,11 @@ import pandas as pd
 from typing import Optional
 
 RACE_DISTANCE_KM = 90.0
+TRAINING_START = "2026-01-01"
 
 
 def weekly_volume(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
-    return conn.execute("""
+    return conn.execute(f"""
         SELECT
             DATE_TRUNC('week', start_date_local::DATE) AS week_start,
             SUM(CASE WHEN category = 'running' THEN distance_km ELSE 0 END) AS run_distance_km,
@@ -17,13 +18,14 @@ def weekly_volume(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
             COUNT(*) AS session_count,
             7 - COUNT(DISTINCT start_date_local::DATE) AS rest_day_count
         FROM activities
+        WHERE start_date_local::DATE >= '{TRAINING_START}'
         GROUP BY 1
         ORDER BY 1 DESC
     """).df()
 
 
 def weekly_category_load(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
-    return conn.execute("""
+    return conn.execute(f"""
         SELECT
             DATE_TRUNC('week', start_date_local::DATE) AS week_start,
             SUM(CASE WHEN category = 'running'    THEN load_score ELSE 0 END) AS running_load,
@@ -32,6 +34,7 @@ def weekly_category_load(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
             SUM(CASE WHEN category = 'gym'        THEN load_score ELSE 0 END) AS gym_load,
             SUM(load_score) AS total_load
         FROM activities
+        WHERE start_date_local::DATE >= '{TRAINING_START}'
         GROUP BY 1
         ORDER BY 1 DESC
     """).df()
@@ -50,18 +53,20 @@ def recent_activities(conn: duckdb.DuckDBPyConnection, n: int = 15) -> pd.DataFr
             average_heartrate,
             ROUND(load_score, 0) AS load_score
         FROM activities
+        WHERE start_date_local::DATE >= '{TRAINING_START}'
         ORDER BY start_date_local DESC
         LIMIT {n}
     """).df()
 
 
 def acwr_history(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
-    return conn.execute("""
+    return conn.execute(f"""
         WITH daily AS (
             SELECT
                 start_date_local::DATE AS day,
                 SUM(load_score) AS daily_load
             FROM activities
+            WHERE start_date_local::DATE >= '{TRAINING_START}'
             GROUP BY 1
         ),
         rolling AS (
@@ -86,12 +91,13 @@ def acwr_history(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
 
 
 def weekly_ramp_rate(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
-    return conn.execute("""
+    return conn.execute(f"""
         WITH weekly AS (
             SELECT
                 DATE_TRUNC('week', start_date_local::DATE) AS week_start,
                 SUM(CASE WHEN category = 'running' THEN COALESCE(distance_km, 0) ELSE 0 END) AS run_distance_km
             FROM activities
+            WHERE start_date_local::DATE >= '{TRAINING_START}'
             GROUP BY 1
         )
         SELECT
@@ -112,13 +118,14 @@ def weekly_ramp_rate(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
 
 
 def weekly_monotony(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
-    return conn.execute("""
+    return conn.execute(f"""
         WITH daily AS (
             SELECT
                 DATE_TRUNC('week', start_date_local::DATE) AS week_start,
                 start_date_local::DATE AS day,
                 SUM(load_score) AS daily_load
             FROM activities
+            WHERE start_date_local::DATE >= '{TRAINING_START}'
             GROUP BY 1, 2
         )
         SELECT
@@ -143,13 +150,14 @@ def weekly_monotony(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
 
 
 def long_run_pct(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
-    return conn.execute("""
+    return conn.execute(f"""
         WITH weekly AS (
             SELECT
                 DATE_TRUNC('week', start_date_local::DATE) AS week_start,
                 SUM(CASE WHEN category = 'running' THEN COALESCE(distance_km, 0) ELSE 0 END) AS run_distance_km,
                 MAX(CASE WHEN category = 'running' THEN COALESCE(distance_km, 0) ELSE 0 END) AS longest_run_km
             FROM activities
+            WHERE start_date_local::DATE >= '{TRAINING_START}'
             GROUP BY 1
         )
         SELECT
@@ -167,18 +175,19 @@ def long_run_pct(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
 
 
 def weekly_elevation(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
-    return conn.execute("""
+    return conn.execute(f"""
         SELECT
             DATE_TRUNC('week', start_date_local::DATE) AS week_start,
             SUM(CASE WHEN category = 'running' THEN COALESCE(elevation_gain_m, 0) ELSE 0 END) AS weekly_gain_m
         FROM activities
+        WHERE start_date_local::DATE >= '{TRAINING_START}'
         GROUP BY 1
         ORDER BY 1
     """).df()
 
 
 def weekly_zone_time(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
-    return conn.execute("""
+    return conn.execute(f"""
         SELECT
             DATE_TRUNC('week', a.start_date_local::DATE) AS week_start,
             ROUND(SUM(a.moving_time_min * sd.pct_time_z1 / 100.0), 1) AS z1_min,
@@ -189,13 +198,14 @@ def weekly_zone_time(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
         FROM activities a
         JOIN activity_streams_derived sd ON a.id = sd.activity_id
         WHERE a.category = 'running'
+          AND a.start_date_local::DATE >= '{TRAINING_START}'
         GROUP BY 1
         ORDER BY 1
     """).df()
 
 
 def cadence_trend(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
-    return conn.execute("""
+    return conn.execute(f"""
         SELECT
             a.start_date_local::DATE AS activity_date,
             a.name,
@@ -205,12 +215,13 @@ def cadence_trend(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
         JOIN activity_streams_derived sd ON a.id = sd.activity_id
         WHERE a.category = 'running'
           AND sd.cadence_avg IS NOT NULL
+          AND a.start_date_local::DATE >= '{TRAINING_START}'
         ORDER BY a.start_date_local
     """).df()
 
 
 def long_run_history(conn: duckdb.DuckDBPyConnection, min_km: float = 20.0) -> pd.DataFrame:
-    return conn.execute("""
+    return conn.execute(f"""
         SELECT
             a.start_date_local::DATE AS activity_date,
             a.name,
@@ -227,13 +238,14 @@ def long_run_history(conn: duckdb.DuckDBPyConnection, min_km: float = 20.0) -> p
         FROM activities a
         LEFT JOIN activity_streams_derived sd ON a.id = sd.activity_id
         WHERE a.category = 'running'
-          AND a.distance_km >= ?
+          AND a.distance_km >= {min_km}
+          AND a.start_date_local::DATE >= '{TRAINING_START}'
         ORDER BY a.start_date_local DESC
-    """, [min_km]).df()
+    """).df()
 
 
 def monthly_volume(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
-    return conn.execute("""
+    return conn.execute(f"""
         SELECT
             DATE_TRUNC('month', start_date_local::DATE) AS month_start,
             SUM(CASE WHEN category = 'running' THEN COALESCE(distance_km, 0) ELSE 0 END) AS run_distance_km,
@@ -241,18 +253,20 @@ def monthly_volume(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
             SUM(CASE WHEN category = 'running' THEN COALESCE(elevation_gain_m, 0) ELSE 0 END) AS elevation_gain_m,
             COUNT(CASE WHEN category = 'running' THEN 1 END) AS run_count
         FROM activities
+        WHERE start_date_local::DATE >= '{TRAINING_START}'
         GROUP BY 1
         ORDER BY 1
     """).df()
 
 
 def plan_adherence(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
-    return conn.execute("""
+    return conn.execute(f"""
         WITH weekly_actual AS (
             SELECT
                 DATE_TRUNC('week', start_date_local::DATE) AS week_start,
                 SUM(CASE WHEN category = 'running' THEN COALESCE(distance_km, 0) ELSE 0 END) AS actual_distance_km
             FROM activities
+            WHERE start_date_local::DATE >= '{TRAINING_START}'
             GROUP BY 1
         )
         SELECT
@@ -305,7 +319,7 @@ def current_week_stats(conn: duckdb.DuckDBPyConnection) -> dict:
 
 
 def zone2_pace_trend(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
-    return conn.execute("""
+    return conn.execute(f"""
         SELECT
             a.start_date_local::DATE AS activity_date,
             a.name,
@@ -324,19 +338,21 @@ def zone2_pace_trend(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
         WHERE a.category = 'running'
           AND sd.pct_time_z2 >= 50
           AND a.distance_km >= 5
+          AND a.start_date_local::DATE >= '{TRAINING_START}'
         ORDER BY a.start_date_local
     """).df()
 
 
 def back_to_back_runs(conn: duckdb.DuckDBPyConnection, min_km: float = 15.0) -> pd.DataFrame:
-    return conn.execute("""
+    return conn.execute(f"""
         WITH runs AS (
             SELECT
                 start_date_local::DATE AS run_date,
                 distance_km
             FROM activities
             WHERE category = 'running'
-              AND distance_km >= ?
+              AND distance_km >= {min_km}
+              AND start_date_local::DATE >= '{TRAINING_START}'
         )
         SELECT
             r1.run_date AS day1,
@@ -347,7 +363,7 @@ def back_to_back_runs(conn: duckdb.DuckDBPyConnection, min_km: float = 15.0) -> 
         FROM runs r1
         JOIN runs r2 ON r2.run_date = r1.run_date + INTERVAL 1 DAY
         ORDER BY r1.run_date DESC
-    """, [min_km]).df()
+    """).df()
 
 
 def comrades_milestones(
@@ -355,46 +371,55 @@ def comrades_milestones(
     race_distance_km: float = RACE_DISTANCE_KM,
     race_descent_m: float = 1800.0,
 ) -> dict:
-    longest_run = conn.execute(
-        "SELECT COALESCE(MAX(distance_km), 0) FROM activities WHERE category = 'running'"
-    ).fetchone()[0]
+    longest_run = conn.execute(f"""
+        SELECT COALESCE(MAX(distance_km), 0) FROM activities
+        WHERE category = 'running'
+          AND start_date_local::DATE >= '{TRAINING_START}'
+    """).fetchone()[0]
 
-    total_descent = conn.execute("""
+    total_descent = conn.execute(f"""
         SELECT COALESCE(SUM(sd.elevation_loss_m), 0)
         FROM activities a
         JOIN activity_streams_derived sd ON a.id = sd.activity_id
         WHERE a.category = 'running'
+          AND a.start_date_local::DATE >= '{TRAINING_START}'
     """).fetchone()[0]
 
-    total_gain = conn.execute(
-        "SELECT COALESCE(SUM(elevation_gain_m), 0) FROM activities WHERE category = 'running'"
-    ).fetchone()[0]
+    total_gain = conn.execute(f"""
+        SELECT COALESCE(SUM(elevation_gain_m), 0) FROM activities
+        WHERE category = 'running'
+          AND start_date_local::DATE >= '{TRAINING_START}'
+    """).fetchone()[0]
 
-    run_counts = conn.execute("""
+    run_counts = conn.execute(f"""
         SELECT
             COUNT(CASE WHEN distance_km >= 20 THEN 1 END) AS runs_20plus,
             COUNT(CASE WHEN distance_km >= 30 THEN 1 END) AS runs_30plus,
             COUNT(CASE WHEN distance_km >= 40 THEN 1 END) AS runs_40plus
         FROM activities
         WHERE category = 'running'
+          AND start_date_local::DATE >= '{TRAINING_START}'
     """).fetchone()
 
-    max_b2b = conn.execute("""
+    max_b2b = conn.execute(f"""
         WITH runs AS (
             SELECT start_date_local::DATE AS run_date, distance_km
-            FROM activities WHERE category = 'running'
+            FROM activities
+            WHERE category = 'running'
+              AND start_date_local::DATE >= '{TRAINING_START}'
         )
         SELECT COALESCE(MAX(r1.distance_km + r2.distance_km), 0)
         FROM runs r1
         JOIN runs r2 ON r2.run_date = r1.run_date + INTERVAL 1 DAY
     """).fetchone()[0]
 
-    recent_pace_df = conn.execute("""
+    recent_pace_df = conn.execute(f"""
         SELECT 60.0 / average_speed_kmh AS pace_min_km
         FROM activities
         WHERE category = 'running'
           AND distance_km >= 25
           AND average_speed_kmh > 0
+          AND start_date_local::DATE >= '{TRAINING_START}'
         ORDER BY start_date_local DESC
         LIMIT 5
     """).df()

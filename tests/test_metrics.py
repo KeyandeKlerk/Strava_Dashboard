@@ -51,17 +51,17 @@ def _insert_gym(conn, activity_id, date_str, moving_time_min=60.0):
 
 
 def test_weekly_volume_returns_dataframe(mem_conn):
-    _insert_run(mem_conn, 1, "2024-03-11T07:00:00", 10.0)
-    _insert_run(mem_conn, 2, "2024-03-13T07:00:00", 15.0)
+    _insert_run(mem_conn, 1, "2026-03-11T07:00:00", 10.0)
+    _insert_run(mem_conn, 2, "2026-03-13T07:00:00", 15.0)
     df = metrics.weekly_volume(mem_conn)
     assert isinstance(df, pd.DataFrame)
     assert "run_distance_km" in df.columns
 
 
 def test_weekly_volume_sums_by_week(mem_conn):
-    _insert_run(mem_conn, 1, "2024-03-11T07:00:00", 10.0)  # Mon
-    _insert_run(mem_conn, 2, "2024-03-13T07:00:00", 15.0)  # Wed
-    _insert_run(mem_conn, 3, "2024-03-18T07:00:00", 12.0)  # following Mon
+    _insert_run(mem_conn, 1, "2026-03-11T07:00:00", 10.0)  # Mon
+    _insert_run(mem_conn, 2, "2026-03-13T07:00:00", 15.0)  # Wed
+    _insert_run(mem_conn, 3, "2026-03-18T07:00:00", 12.0)  # following Mon
     df = metrics.weekly_volume(mem_conn)
     assert len(df) == 2
     row = df[(df["run_distance_km"] - 25.0).abs() < 1e-6]
@@ -69,29 +69,29 @@ def test_weekly_volume_sums_by_week(mem_conn):
 
 
 def test_weekly_volume_longest_run(mem_conn):
-    _insert_run(mem_conn, 1, "2024-03-11T07:00:00", 10.0)
-    _insert_run(mem_conn, 2, "2024-03-13T07:00:00", 22.0)
+    _insert_run(mem_conn, 1, "2026-03-11T07:00:00", 10.0)
+    _insert_run(mem_conn, 2, "2026-03-13T07:00:00", 22.0)
     df = metrics.weekly_volume(mem_conn)
     assert df.iloc[0]["longest_run_km"] == pytest.approx(22.0)
 
 
 def test_weekly_volume_excludes_gym_from_distance(mem_conn):
-    _insert_run(mem_conn, 1, "2024-03-11T07:00:00", 10.0)
-    _insert_gym(mem_conn, 2, "2024-03-12T08:00:00", 60.0)
+    _insert_run(mem_conn, 1, "2026-03-11T07:00:00", 10.0)
+    _insert_gym(mem_conn, 2, "2026-03-12T08:00:00", 60.0)
     df = metrics.weekly_volume(mem_conn)
     assert df.iloc[0]["run_distance_km"] == pytest.approx(10.0)
 
 
 def test_weekly_volume_total_time_includes_all_categories(mem_conn):
-    _insert_run(mem_conn, 1, "2024-03-11T07:00:00", 10.0, moving_time_min=60.0)
-    _insert_gym(mem_conn, 2, "2024-03-12T08:00:00", 60.0)
+    _insert_run(mem_conn, 1, "2026-03-11T07:00:00", 10.0, moving_time_min=60.0)
+    _insert_gym(mem_conn, 2, "2026-03-12T08:00:00", 60.0)
     df = metrics.weekly_volume(mem_conn)
     assert df.iloc[0]["total_time_min"] == pytest.approx(120.0)
 
 
 def test_weekly_category_load_splits_categories(mem_conn):
-    _insert_run(mem_conn, 1, "2024-03-11T07:00:00", 10.0, load_score=80.0)
-    _insert_gym(mem_conn, 2, "2024-03-12T08:00:00", 60.0)
+    _insert_run(mem_conn, 1, "2026-03-11T07:00:00", 10.0, load_score=80.0)
+    _insert_gym(mem_conn, 2, "2026-03-12T08:00:00", 60.0)
     df = metrics.weekly_category_load(mem_conn)
     row = df.iloc[0]
     assert row["running_load"] == pytest.approx(80.0)
@@ -100,18 +100,18 @@ def test_weekly_category_load_splits_categories(mem_conn):
 
 def test_recent_activities_returns_n_rows(mem_conn):
     for i in range(15):
-        _insert_run(mem_conn, i, f"2024-03-{i+1:02d}T07:00:00", float(i + 5))
+        _insert_run(mem_conn, i, f"2026-03-{i+1:02d}T07:00:00", float(i + 5))
     df = metrics.recent_activities(mem_conn, n=10)
     assert len(df) == 10
 
 
 def test_acwr_history_shape(mem_conn):
     for i, (d, km, load) in enumerate([
-        ("2024-03-04T07:00:00", 10.0, 80.0),
-        ("2024-03-06T07:00:00", 8.0,  65.0),
-        ("2024-03-08T07:00:00", 6.0,  50.0),
-        ("2024-03-11T07:00:00", 12.0, 90.0),
-        ("2024-03-13T07:00:00", 10.0, 75.0),
+        ("2026-03-04T07:00:00", 10.0, 80.0),
+        ("2026-03-06T07:00:00", 8.0,  65.0),
+        ("2026-03-08T07:00:00", 6.0,  50.0),
+        ("2026-03-11T07:00:00", 12.0, 90.0),
+        ("2026-03-13T07:00:00", 10.0, 75.0),
     ]):
         _insert_run(mem_conn, i + 100, d, km, load_score=load)
 
@@ -122,14 +122,14 @@ def test_acwr_history_shape(mem_conn):
 
 
 def test_acwr_is_computable_with_minimal_data(mem_conn):
-    _insert_run(mem_conn, 1, "2024-03-11T07:00:00", 10.0, load_score=80.0)
+    _insert_run(mem_conn, 1, "2026-03-11T07:00:00", 10.0, load_score=80.0)
     df = metrics.acwr_history(mem_conn)
     assert len(df) >= 1
 
 
 def test_weekly_ramp_rate_returns_pct(mem_conn):
-    _insert_run(mem_conn, 1, "2024-03-04T07:00:00", 40.0, load_score=40.0)  # week 1
-    _insert_run(mem_conn, 2, "2024-03-11T07:00:00", 44.0, load_score=44.0)  # week 2 (+10%)
+    _insert_run(mem_conn, 1, "2026-03-04T07:00:00", 40.0, load_score=40.0)  # week 1
+    _insert_run(mem_conn, 2, "2026-03-11T07:00:00", 44.0, load_score=44.0)  # week 2 (+10%)
     df = metrics.weekly_ramp_rate(mem_conn)
     latest = df.iloc[0]
     assert latest["ramp_pct"] == pytest.approx(10.0, rel=0.01)
@@ -138,7 +138,7 @@ def test_weekly_ramp_rate_returns_pct(mem_conn):
 def test_weekly_monotony_computes(mem_conn):
     # 5 sessions same week, varied load — checks monotony computes without error
     for i, (d, load) in enumerate(zip(
-        ["2024-03-11", "2024-03-12", "2024-03-13", "2024-03-14", "2024-03-15"],
+        ["2026-03-11", "2026-03-12", "2026-03-13", "2026-03-14", "2026-03-15"],
         [70.0, 40.0, 80.0, 50.0, 60.0],
     )):
         _insert_run(mem_conn, i + 200, f"{d}T07:00:00", 10.0, load_score=load)
@@ -148,8 +148,8 @@ def test_weekly_monotony_computes(mem_conn):
 
 
 def test_long_run_pct_of_weekly_volume(mem_conn):
-    _insert_run(mem_conn, 1, "2024-03-11T07:00:00", 10.0)
-    _insert_run(mem_conn, 2, "2024-03-13T07:00:00", 30.0)
+    _insert_run(mem_conn, 1, "2026-03-11T07:00:00", 10.0)
+    _insert_run(mem_conn, 2, "2026-03-13T07:00:00", 30.0)
     df = metrics.long_run_pct(mem_conn)
     assert df.iloc[0]["long_run_pct"] == pytest.approx(75.0)
 
@@ -159,7 +159,7 @@ def test_plan_adherence_returns_dataframe(mem_conn):
     from datetime import date
     upsert_training_plan_week(mem_conn, {
         "week_number": 1,
-        "week_start_date": date(2024, 3, 11),
+        "week_start_date": date(2026, 3, 9),
         "phase": "base",
         "planned_distance_km": 50.0,
         "planned_long_run_km": 18.0,
@@ -167,7 +167,7 @@ def test_plan_adherence_returns_dataframe(mem_conn):
         "is_deload": False,
         "notes": "",
     })
-    _insert_run(mem_conn, 999, "2024-03-13T07:00:00", 45.0)
+    _insert_run(mem_conn, 999, "2026-03-13T07:00:00", 45.0)
     df = metrics.plan_adherence(mem_conn)
     assert isinstance(df, pd.DataFrame)
     assert "adherence_pct" in df.columns
@@ -199,31 +199,31 @@ def _insert_run_with_streams(conn, activity_id, date_str, distance_km, avg_hr, a
 
 
 def test_zone2_pace_trend_includes_mostly_z2_runs(mem_conn):
-    _insert_run_with_streams(mem_conn, 1, "2024-03-11T07:00:00", 15.0, 145.0, 10.5, pct_z2=60.0)
-    _insert_run_with_streams(mem_conn, 2, "2024-03-18T07:00:00", 16.0, 143.0, 10.8, pct_z2=65.0)
+    _insert_run_with_streams(mem_conn, 1, "2026-03-11T07:00:00", 15.0, 145.0, 10.5, pct_z2=60.0)
+    _insert_run_with_streams(mem_conn, 2, "2026-03-18T07:00:00", 16.0, 143.0, 10.8, pct_z2=65.0)
     # Run with no streams data — excluded by INNER JOIN regardless of distance
-    _insert_run(mem_conn, 3, "2024-03-20T07:00:00", 8.0)
+    _insert_run(mem_conn, 3, "2026-03-20T07:00:00", 8.0)
     df = metrics.zone2_pace_trend(mem_conn)
     assert len(df) == 2
 
 
 def test_back_to_back_runs_finds_consecutive(mem_conn):
-    _insert_run(mem_conn, 1, "2024-03-16T07:00:00", 20.0)  # Saturday
-    _insert_run(mem_conn, 2, "2024-03-17T07:00:00", 16.0)  # Sunday
+    _insert_run(mem_conn, 1, "2026-03-16T07:00:00", 20.0)  # Saturday
+    _insert_run(mem_conn, 2, "2026-03-17T07:00:00", 16.0)  # Sunday
     df = metrics.back_to_back_runs(mem_conn)
     assert len(df) >= 1
     assert df.iloc[0]["combined_km"] == pytest.approx(36.0)
 
 
 def test_back_to_back_excludes_non_consecutive(mem_conn):
-    _insert_run(mem_conn, 1, "2024-03-16T07:00:00", 20.0)  # Saturday
-    _insert_run(mem_conn, 2, "2024-03-18T07:00:00", 16.0)  # Monday — gap
+    _insert_run(mem_conn, 1, "2026-03-16T07:00:00", 20.0)  # Saturday
+    _insert_run(mem_conn, 2, "2026-03-18T07:00:00", 16.0)  # Monday — gap
     df = metrics.back_to_back_runs(mem_conn)
     assert len(df) == 0
 
 
 def test_comrades_milestones_returns_dict(mem_conn):
-    _insert_run_with_streams(mem_conn, 1, "2024-03-16T07:00:00", 30.0, 145.0, 10.0, loss_m=300.0)
+    _insert_run_with_streams(mem_conn, 1, "2026-03-16T07:00:00", 30.0, 145.0, 10.0, loss_m=300.0)
     result = metrics.comrades_milestones(mem_conn)
     assert "longest_run_km" in result
     assert "longest_run_pct_race" in result
@@ -233,9 +233,9 @@ def test_comrades_milestones_returns_dict(mem_conn):
 
 
 def test_comrades_milestones_includes_gain_and_run_counts(mem_conn):
-    _insert_run(mem_conn, 1, "2024-03-11T07:00:00", 25.0, elevation=200.0)
-    _insert_run(mem_conn, 2, "2024-03-18T07:00:00", 22.0, elevation=150.0)
-    _insert_run(mem_conn, 3, "2024-03-25T07:00:00", 10.0, elevation=50.0)
+    _insert_run(mem_conn, 1, "2026-03-11T07:00:00", 25.0, elevation=200.0)
+    _insert_run(mem_conn, 2, "2026-03-18T07:00:00", 22.0, elevation=150.0)
+    _insert_run(mem_conn, 3, "2026-03-25T07:00:00", 10.0, elevation=50.0)
     result = metrics.comrades_milestones(mem_conn)
     assert "total_gain_m" in result
     assert result["total_gain_m"] == pytest.approx(400.0)
@@ -244,7 +244,7 @@ def test_comrades_milestones_includes_gain_and_run_counts(mem_conn):
 
 
 def test_weekly_zone_time_aggregates_by_week(mem_conn):
-    _insert_run_with_streams(mem_conn, 1, "2024-03-11T07:00:00", 15.0, 145.0, 10.5, pct_z2=60.0)
+    _insert_run_with_streams(mem_conn, 1, "2026-03-11T07:00:00", 15.0, 145.0, 10.5, pct_z2=60.0)
     df = metrics.weekly_zone_time(mem_conn)
     assert not df.empty
     assert "z2_min" in df.columns
@@ -253,25 +253,25 @@ def test_weekly_zone_time_aggregates_by_week(mem_conn):
 
 
 def test_cadence_trend_returns_runs_with_cadence(mem_conn):
-    _insert_run_with_streams(mem_conn, 1, "2024-03-11T07:00:00", 10.0, 145.0, 10.5)
+    _insert_run_with_streams(mem_conn, 1, "2026-03-11T07:00:00", 10.0, 145.0, 10.5)
     df = metrics.cadence_trend(mem_conn)
     assert not df.empty
     assert float(df.iloc[0]["cadence_avg"]) == pytest.approx(172.5)
 
 
 def test_long_run_history_filters_by_distance(mem_conn):
-    _insert_run(mem_conn, 1, "2024-03-11T07:00:00", 25.0)
-    _insert_run(mem_conn, 2, "2024-03-12T07:00:00", 10.0)
+    _insert_run(mem_conn, 1, "2026-03-11T07:00:00", 25.0)
+    _insert_run(mem_conn, 2, "2026-03-12T07:00:00", 10.0)
     df = metrics.long_run_history(mem_conn, min_km=20.0)
     assert len(df) == 1
     assert float(df.iloc[0]["distance_km"]) == pytest.approx(25.0)
 
 
 def test_monthly_volume_groups_by_month(mem_conn):
-    _insert_run(mem_conn, 1, "2024-03-11T07:00:00", 15.0)
-    _insert_run(mem_conn, 2, "2024-03-18T07:00:00", 20.0)
-    _insert_run(mem_conn, 3, "2024-04-01T07:00:00", 10.0)
+    _insert_run(mem_conn, 1, "2026-03-11T07:00:00", 15.0)
+    _insert_run(mem_conn, 2, "2026-03-18T07:00:00", 20.0)
+    _insert_run(mem_conn, 3, "2026-04-01T07:00:00", 10.0)
     df = metrics.monthly_volume(mem_conn)
     assert len(df) == 2
-    march = df[df["month_start"].astype(str).str.startswith("2024-03")]
+    march = df[df["month_start"].astype(str).str.startswith("2026-03")]
     assert float(march.iloc[0]["run_distance_km"]) == pytest.approx(35.0)
