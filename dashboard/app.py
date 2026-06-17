@@ -115,38 +115,77 @@ latest_mono = mono_df["monotony"].dropna().iloc[0] if not mono_df.empty and mono
 latest_long_pct = long_pct_df["long_run_pct"].dropna().iloc[0] if not long_pct_df.empty and long_pct_df["long_run_pct"].notna().any() else None
 
 rc1, rc2, rc3, rc4 = st.columns(4)
-rc1.metric(
-    f"{_flag(latest_acwr, 0.8, 1.3)} ACWR",
-    f"{latest_acwr:.2f}" if latest_acwr is not None else "—",
-    help="Acute:Chronic Workload Ratio. Optimal: 0.8–1.3",
-)
-rc2.metric(
-    f"{_flag(latest_ramp, -10, 10)} Weekly Ramp",
-    f"{latest_ramp:.1f}%" if latest_ramp is not None else "—",
-    help="Week-over-week % change in running distance. Flag if >10%",
-)
-rc3.metric(
-    "Monotony",
-    f"{latest_mono:.2f}" if latest_mono is not None else "—",
-    help="Mean daily load ÷ SD. Higher = less variation in training stimulus",
-)
-rc4.metric(
-    f"{_flag(latest_long_pct, 0, 35)} Long Run %",
-    f"{latest_long_pct:.1f}%" if latest_long_pct is not None else "—",
-    help="Long run as % of weekly distance. Flag if >35% (ITB risk)",
-)
-
-if not acwr_df.empty:
-    fig_acwr = px.line(
-        acwr_df.sort_values("day"),
-        x="day", y="acwr",
-        title="ACWR History",
-        labels={"acwr": "ACWR", "day": "Date"},
+with rc1:
+    st.metric(
+        f"{_flag(latest_acwr, 0.8, 1.3)} ACWR",
+        f"{latest_acwr:.2f}" if latest_acwr is not None else "—",
     )
-    fig_acwr.add_hline(y=0.8, line_dash="dash", line_color="green", annotation_text="0.8 lower")
-    fig_acwr.add_hline(y=1.3, line_dash="dash", line_color="red", annotation_text="1.3 upper")
-    fig_acwr.update_layout(height=280)
-    st.plotly_chart(fig_acwr, use_container_width=True)
+    st.caption("7-day load ÷ 4-week average. **0.8–1.3 = safe zone.** Above 1.5 spikes injury risk sharply.")
+with rc2:
+    st.metric(
+        f"{_flag(latest_ramp, -10, 10)} Weekly Ramp",
+        f"{latest_ramp:.1f}%" if latest_ramp is not None else "—",
+    )
+    st.caption("Week-on-week distance change. **Stay within ±10%** — jump more and injury risk doubles.")
+with rc3:
+    st.metric(
+        f"{_flag(latest_mono, 0, 1.5)} Monotony",
+        f"{latest_mono:.2f}" if latest_mono is not None else "—",
+    )
+    st.caption("Mean load ÷ SD. Above **2.0 = training too repetitive**, raising overuse risk. Vary hard/easy days.")
+with rc4:
+    st.metric(
+        f"{_flag(latest_long_pct, 0, 35)} Long Run %",
+        f"{latest_long_pct:.1f}%" if latest_long_pct is not None else "—",
+    )
+    st.caption("Longest run as % of weekly volume. Above **35% risks ITB** — spread load across more sessions.")
+
+col_acwr, col_ramp = st.columns(2)
+
+with col_acwr:
+    if not acwr_df.empty:
+        fig_acwr = px.line(
+            acwr_df.sort_values("day"),
+            x="day", y="acwr",
+            title="ACWR History",
+            labels={"acwr": "ACWR", "day": "Date"},
+        )
+        fig_acwr.add_hrect(
+            y0=0.8, y1=1.3,
+            fillcolor="green", opacity=0.12, line_width=0,
+        )
+        fig_acwr.add_hline(y=0.8, line_dash="dash", line_color="green", line_width=1,
+                           annotation_text="0.8 floor", annotation_position="bottom right")
+        fig_acwr.add_hline(y=1.3, line_dash="dash", line_color="orange", line_width=1,
+                           annotation_text="1.3 caution", annotation_position="top right")
+        fig_acwr.add_hline(y=1.5, line_dash="dot", line_color="red", line_width=1,
+                           annotation_text="1.5 danger", annotation_position="top right")
+        fig_acwr.update_layout(height=300)
+        st.plotly_chart(fig_acwr, use_container_width=True)
+
+with col_ramp:
+    if not ramp_df.empty:
+        ramp_sorted = ramp_df.dropna(subset=["ramp_pct"]).sort_values("week_start").tail(16)
+        bar_colors = [
+            "#e74c3c" if abs(r) > 15 else ("#f39c12" if abs(r) > 10 else "#2ecc71")
+            for r in ramp_sorted["ramp_pct"]
+        ]
+        fig_ramp = go.Figure(go.Bar(
+            x=ramp_sorted["week_start"],
+            y=ramp_sorted["ramp_pct"],
+            marker_color=bar_colors,
+        ))
+        fig_ramp.add_hline(y=10, line_dash="dash", line_color="#f39c12", line_width=1,
+                           annotation_text="+10%", annotation_position="top right")
+        fig_ramp.add_hline(y=-10, line_dash="dash", line_color="#f39c12", line_width=1,
+                           annotation_text="-10%", annotation_position="bottom right")
+        fig_ramp.update_layout(
+            title="Weekly Ramp Rate (last 16 weeks)",
+            xaxis_title="Week",
+            yaxis_title="Change (%)",
+            height=300,
+        )
+        st.plotly_chart(fig_ramp, use_container_width=True)
 
 st.divider()
 
@@ -199,7 +238,6 @@ if not z2_df.empty:
             labels={"pace_min_per_km": "Pace (min/km)", "activity_date": "Date"},
             hover_data=["name", "distance_km", "average_heartrate"],
         )
-        fig_z2.update_yaxes(autorange="reversed")
         fig_z2.update_layout(height=320)
         st.plotly_chart(fig_z2, use_container_width=True)
 
@@ -228,31 +266,81 @@ st.subheader("Comrades 2027 Milestones")
 ms = metrics.comrades_milestones(conn, race_distance_km=RACE_DISTANCE_KM)
 b2b_df = metrics.back_to_back_runs(conn)
 
-m1, m2, m3, m4 = st.columns(4)
+m1, m2, m3, m4, m5, m6 = st.columns(6)
 m1.metric(
     "Longest Run",
     f"{ms['longest_run_km']:.1f} km",
     f"{ms['longest_run_pct_race']:.0f}% of race",
 )
 m2.metric(
-    "Best Back-to-Back",
-    f"{ms['max_b2b_km']:.1f} km" if ms["max_b2b_km"] else "—",
-    help="Combined distance of two consecutive long run days",
+    "Total Elev Gain",
+    f"{ms['total_gain_m']:,.0f} m",
+    help="Cumulative elevation gain across all runs",
 )
 m3.metric(
     "Descent Practiced",
     f"{ms['total_descent_m']:.0f} m",
-    f"{ms['descent_pct_practiced']:.0f}% of {ms['race_descent_m']:.0f}m race descent",
-    help="Cumulative elevation loss from all runs. Comrades Down Run ≈ 1800m descent.",
+    f"{ms['descent_pct_practiced']:.0f}% of {ms['race_descent_m']:.0f}m target",
+    help="Cumulative elevation loss from GPS streams. Comrades Down Run is ~1800m net descent.",
 )
 m4.metric(
+    "Runs ≥30 km",
+    str(ms["runs_30plus"]),
+    f"{ms['runs_20plus']} runs ≥20 km",
+)
+m5.metric(
+    "Best Back-to-Back",
+    f"{ms['max_b2b_km']:.1f} km" if ms["max_b2b_km"] else "—",
+    help="Combined distance of two consecutive long run days",
+)
+m6.metric(
     "Projected Finish",
     f"{ms['projected_finish_h']:.2f} h" if ms["projected_finish_h"] else "—",
     f"vs {ms['cutoff_h']:.0f}h cutoff",
     delta_color="inverse",
 )
 
+elev_col, band_col = st.columns([3, 2])
+
+with elev_col:
+    elev_df = metrics.weekly_elevation(conn)
+    if not elev_df.empty:
+        fig_elev = go.Figure(go.Bar(
+            x=elev_df["week_start"],
+            y=elev_df["weekly_gain_m"],
+            marker_color="rgba(121,85,72,0.75)",
+        ))
+        fig_elev.update_layout(
+            title="Weekly Elevation Gain (m)",
+            xaxis_title="Week",
+            yaxis_title="Gain (m)",
+            height=300,
+        )
+        st.plotly_chart(fig_elev, use_container_width=True)
+
+with band_col:
+    proj_h = ms.get("projected_finish_h")
+    st.markdown("**Comrades Finish Time Bands**")
+    BANDS = [
+        ("Wally Hayward", "Sub 6:00",           6.0),
+        ("Gold",          "Sub 7:30",            7.5),
+        ("Silver",        "Sub 9:00",            9.0),
+        ("Bill Rowan",    "Sub 10:00",           10.0),
+        ("Robert Mtshali","Sub 11:00",           11.0),
+        ("Bronze",        "Sub 12:00 (cutoff)",  12.0),
+    ]
+    prev_h = 0.0
+    for medal, label, cutoff_h in BANDS:
+        on_track = proj_h is not None and prev_h <= proj_h < cutoff_h
+        prefix = "🎯 " if on_track else "　 "
+        text = f"**{medal}**" if on_track else medal
+        st.markdown(f"{prefix}{text} — {label}")
+        prev_h = cutoff_h
+    if proj_h is None:
+        st.caption("No projected time yet — need runs ≥25 km to estimate.")
+
 if not b2b_df.empty:
+    st.markdown("**Back-to-Back Long Runs**")
     st.dataframe(
         b2b_df.head(10),
         use_container_width=True,

@@ -166,6 +166,17 @@ def long_run_pct(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     """).df()
 
 
+def weekly_elevation(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    return conn.execute("""
+        SELECT
+            DATE_TRUNC('week', start_date_local::DATE) AS week_start,
+            SUM(CASE WHEN category = 'running' THEN COALESCE(elevation_gain_m, 0) ELSE 0 END) AS weekly_gain_m
+        FROM activities
+        GROUP BY 1
+        ORDER BY 1
+    """).df()
+
+
 def plan_adherence(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     return conn.execute("""
         WITH weekly_actual AS (
@@ -286,6 +297,19 @@ def comrades_milestones(
         WHERE a.category = 'running'
     """).fetchone()[0]
 
+    total_gain = conn.execute(
+        "SELECT COALESCE(SUM(elevation_gain_m), 0) FROM activities WHERE category = 'running'"
+    ).fetchone()[0]
+
+    run_counts = conn.execute("""
+        SELECT
+            COUNT(CASE WHEN distance_km >= 20 THEN 1 END) AS runs_20plus,
+            COUNT(CASE WHEN distance_km >= 30 THEN 1 END) AS runs_30plus,
+            COUNT(CASE WHEN distance_km >= 40 THEN 1 END) AS runs_40plus
+        FROM activities
+        WHERE category = 'running'
+    """).fetchone()
+
     max_b2b = conn.execute("""
         WITH runs AS (
             SELECT start_date_local::DATE AS run_date, distance_km
@@ -315,6 +339,10 @@ def comrades_milestones(
         "total_descent_m": float(total_descent),
         "race_descent_m": race_descent_m,
         "descent_pct_practiced": round(float(total_descent) / race_descent_m * 100, 1) if total_descent else 0.0,
+        "total_gain_m": float(total_gain),
+        "runs_20plus": run_counts[0] or 0,
+        "runs_30plus": run_counts[1] or 0,
+        "runs_40plus": run_counts[2] or 0,
         "max_b2b_km": float(max_b2b),
         "projected_finish_min": projected_min,
         "projected_finish_h": round(projected_min / 60, 2) if projected_min else None,
