@@ -55,6 +55,145 @@ def recent_activities(conn: duckdb.DuckDBPyConnection, n: int = 15) -> pd.DataFr
     """).df()
 
 
+def acwr_history(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    return conn.execute("""
+        WITH daily AS (
+            SELECT
+                start_date_local::DATE AS day,
+                SUM(load_score) AS daily_load
+            FROM activities
+            GROUP BY 1
+        ),
+        rolling AS (
+            SELECT
+                day,
+                daily_load,
+                SUM(daily_load) OVER (ORDER BY day ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS load_7d,
+                SUM(daily_load) OVER (ORDER BY day ROWS BETWEEN 27 PRECEDING AND CURRENT ROW) AS load_28d
+            FROM daily
+        )
+        SELECT
+            day,
+            load_7d,
+            load_28d,
+            CASE WHEN load_28d > 0
+                THEN ROUND(load_7d / (load_28d / 4.0), 3)
+                ELSE NULL
+            END AS acwr
+        FROM rolling
+        ORDER BY day DESC
+    """).df()
+
+
+def weekly_ramp_rate(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    return conn.execute("""
+        WITH weekly AS (
+            SELECT
+                DATE_TRUNC('week', start_date_local::DATE) AS week_start,
+                SUM(CASE WHEN category = 'running' THEN COALESCE(distance_km, 0) ELSE 0 END) AS run_distance_km
+            FROM activities
+            GROUP BY 1
+        )
+        SELECT
+            week_start,
+            run_distance_km,
+            LAG(run_distance_km) OVER (ORDER BY week_start) AS prev_week_km,
+            CASE
+                WHEN LAG(run_distance_km) OVER (ORDER BY week_start) > 0
+                THEN ROUND(
+                    (run_distance_km - LAG(run_distance_km) OVER (ORDER BY week_start)) /
+                    LAG(run_distance_km) OVER (ORDER BY week_start) * 100, 1
+                )
+                ELSE NULL
+            END AS ramp_pct
+        FROM weekly
+        ORDER BY week_start DESC
+    """).df()
+
+
+def weekly_monotony(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    return conn.execute("""
+        WITH daily AS (
+            SELECT
+                DATE_TRUNC('week', start_date_local::DATE) AS week_start,
+                start_date_local::DATE AS day,
+                SUM(load_score) AS daily_load
+            FROM activities
+            GROUP BY 1, 2
+        )
+        SELECT
+            week_start,
+            AVG(daily_load) AS mean_daily_load,
+            STDDEV(daily_load) AS stddev_daily_load,
+            CASE
+                WHEN STDDEV(daily_load) > 0
+                THEN ROUND(AVG(daily_load) / STDDEV(daily_load), 3)
+                ELSE NULL
+            END AS monotony,
+            SUM(daily_load) AS weekly_total_load,
+            CASE
+                WHEN STDDEV(daily_load) > 0
+                THEN ROUND(AVG(daily_load) / STDDEV(daily_load) * SUM(daily_load), 1)
+                ELSE NULL
+            END AS strain
+        FROM daily
+        GROUP BY 1
+        ORDER BY 1 DESC
+    """).df()
+
+
+def long_run_pct(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    return conn.execute("""
+        WITH weekly AS (
+            SELECT
+                DATE_TRUNC('week', start_date_local::DATE) AS week_start,
+                SUM(CASE WHEN category = 'running' THEN COALESCE(distance_km, 0) ELSE 0 END) AS run_distance_km,
+                MAX(CASE WHEN category = 'running' THEN COALESCE(distance_km, 0) ELSE 0 END) AS longest_run_km
+            FROM activities
+            GROUP BY 1
+        )
+        SELECT
+            week_start,
+            run_distance_km,
+            longest_run_km,
+            CASE
+                WHEN run_distance_km > 0
+                THEN ROUND(longest_run_km / run_distance_km * 100, 1)
+                ELSE NULL
+            END AS long_run_pct
+        FROM weekly
+        ORDER BY week_start DESC
+    """).df()
+
+
+def plan_adherence(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    return conn.execute("""
+        WITH weekly_actual AS (
+            SELECT
+                DATE_TRUNC('week', start_date_local::DATE) AS week_start,
+                SUM(CASE WHEN category = 'running' THEN COALESCE(distance_km, 0) ELSE 0 END) AS actual_distance_km
+            FROM activities
+            GROUP BY 1
+        )
+        SELECT
+            tp.week_start_date,
+            tp.week_number,
+            tp.phase,
+            tp.planned_distance_km,
+            tp.planned_long_run_km,
+            tp.is_deload,
+            COALESCE(wa.actual_distance_km, 0) AS actual_distance_km,
+            CASE
+                WHEN tp.planned_distance_km > 0
+                THEN ROUND(COALESCE(wa.actual_distance_km, 0) / tp.planned_distance_km * 100, 1)
+                ELSE NULL
+            END AS adherence_pct
+        FROM training_plan tp
+        LEFT JOIN weekly_actual wa ON tp.week_start_date::DATE = wa.week_start::DATE
+        ORDER BY tp.week_start_date DESC
+    """).df()
+
+
 def current_week_stats(conn: duckdb.DuckDBPyConnection) -> dict:
     row = conn.execute("""
         SELECT

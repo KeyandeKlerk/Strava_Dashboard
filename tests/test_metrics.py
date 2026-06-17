@@ -103,3 +103,52 @@ def test_recent_activities_returns_n_rows(mem_conn):
         _insert_run(mem_conn, i, f"2024-03-{i+1:02d}T07:00:00", float(i + 5))
     df = metrics.recent_activities(mem_conn, n=10)
     assert len(df) == 10
+
+
+def test_acwr_history_shape(mem_conn):
+    for i, (d, km, load) in enumerate([
+        ("2024-03-04T07:00:00", 10.0, 80.0),
+        ("2024-03-06T07:00:00", 8.0,  65.0),
+        ("2024-03-08T07:00:00", 6.0,  50.0),
+        ("2024-03-11T07:00:00", 12.0, 90.0),
+        ("2024-03-13T07:00:00", 10.0, 75.0),
+    ]):
+        _insert_run(mem_conn, i + 100, d, km, load_score=load)
+
+    df = metrics.acwr_history(mem_conn)
+    assert isinstance(df, pd.DataFrame)
+    assert "acwr" in df.columns
+    assert "load_7d" in df.columns
+
+
+def test_acwr_is_computable_with_minimal_data(mem_conn):
+    _insert_run(mem_conn, 1, "2024-03-11T07:00:00", 10.0, load_score=80.0)
+    df = metrics.acwr_history(mem_conn)
+    assert len(df) >= 1
+
+
+def test_weekly_ramp_rate_returns_pct(mem_conn):
+    _insert_run(mem_conn, 1, "2024-03-04T07:00:00", 40.0, load_score=40.0)  # week 1
+    _insert_run(mem_conn, 2, "2024-03-11T07:00:00", 44.0, load_score=44.0)  # week 2 (+10%)
+    df = metrics.weekly_ramp_rate(mem_conn)
+    latest = df.iloc[0]
+    assert latest["ramp_pct"] == pytest.approx(10.0, rel=0.01)
+
+
+def test_weekly_monotony_computes(mem_conn):
+    # 5 sessions same week, varied load — checks monotony computes without error
+    for i, (d, load) in enumerate(zip(
+        ["2024-03-11", "2024-03-12", "2024-03-13", "2024-03-14", "2024-03-15"],
+        [70.0, 40.0, 80.0, 50.0, 60.0],
+    )):
+        _insert_run(mem_conn, i + 200, f"{d}T07:00:00", 10.0, load_score=load)
+    df = metrics.weekly_monotony(mem_conn)
+    assert isinstance(df, pd.DataFrame)
+    assert "monotony" in df.columns
+
+
+def test_long_run_pct_of_weekly_volume(mem_conn):
+    _insert_run(mem_conn, 1, "2024-03-11T07:00:00", 10.0)
+    _insert_run(mem_conn, 2, "2024-03-13T07:00:00", 30.0)
+    df = metrics.long_run_pct(mem_conn)
+    assert df.iloc[0]["long_run_pct"] == pytest.approx(75.0)
