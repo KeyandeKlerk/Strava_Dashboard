@@ -177,6 +177,75 @@ def weekly_elevation(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     """).df()
 
 
+def weekly_zone_time(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    return conn.execute("""
+        SELECT
+            DATE_TRUNC('week', a.start_date_local::DATE) AS week_start,
+            ROUND(SUM(a.moving_time_min * sd.pct_time_z1 / 100.0), 1) AS z1_min,
+            ROUND(SUM(a.moving_time_min * sd.pct_time_z2 / 100.0), 1) AS z2_min,
+            ROUND(SUM(a.moving_time_min * sd.pct_time_z3 / 100.0), 1) AS z3_min,
+            ROUND(SUM(a.moving_time_min * sd.pct_time_z4 / 100.0), 1) AS z4_min,
+            ROUND(SUM(a.moving_time_min * sd.pct_time_z5 / 100.0), 1) AS z5_min
+        FROM activities a
+        JOIN activity_streams_derived sd ON a.id = sd.activity_id
+        WHERE a.category = 'running'
+        GROUP BY 1
+        ORDER BY 1
+    """).df()
+
+
+def cadence_trend(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    return conn.execute("""
+        SELECT
+            a.start_date_local::DATE AS activity_date,
+            a.name,
+            ROUND(a.distance_km, 1) AS distance_km,
+            sd.cadence_avg
+        FROM activities a
+        JOIN activity_streams_derived sd ON a.id = sd.activity_id
+        WHERE a.category = 'running'
+          AND sd.cadence_avg IS NOT NULL
+        ORDER BY a.start_date_local
+    """).df()
+
+
+def long_run_history(conn: duckdb.DuckDBPyConnection, min_km: float = 20.0) -> pd.DataFrame:
+    return conn.execute("""
+        SELECT
+            a.start_date_local::DATE AS activity_date,
+            a.name,
+            ROUND(a.distance_km, 1) AS distance_km,
+            ROUND(a.moving_time_min, 0) AS duration_min,
+            ROUND(a.elevation_gain_m, 0) AS elevation_gain_m,
+            ROUND(a.average_heartrate, 0) AS avg_hr,
+            CASE WHEN a.average_speed_kmh > 0
+                THEN ROUND(60.0 / a.average_speed_kmh, 2)
+                ELSE NULL
+            END AS pace_min_km,
+            sd.decoupling_pct,
+            sd.pct_time_z2
+        FROM activities a
+        LEFT JOIN activity_streams_derived sd ON a.id = sd.activity_id
+        WHERE a.category = 'running'
+          AND a.distance_km >= ?
+        ORDER BY a.start_date_local DESC
+    """, [min_km]).df()
+
+
+def monthly_volume(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    return conn.execute("""
+        SELECT
+            DATE_TRUNC('month', start_date_local::DATE) AS month_start,
+            SUM(CASE WHEN category = 'running' THEN COALESCE(distance_km, 0) ELSE 0 END) AS run_distance_km,
+            ROUND(SUM(CASE WHEN category = 'running' THEN COALESCE(moving_time_min, 0) ELSE 0 END) / 60.0, 1) AS run_time_h,
+            SUM(CASE WHEN category = 'running' THEN COALESCE(elevation_gain_m, 0) ELSE 0 END) AS elevation_gain_m,
+            COUNT(CASE WHEN category = 'running' THEN 1 END) AS run_count
+        FROM activities
+        GROUP BY 1
+        ORDER BY 1
+    """).df()
+
+
 def plan_adherence(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     return conn.execute("""
         WITH weekly_actual AS (

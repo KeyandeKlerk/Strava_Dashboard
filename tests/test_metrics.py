@@ -230,3 +230,48 @@ def test_comrades_milestones_returns_dict(mem_conn):
     assert "total_descent_m" in result
     assert result["total_descent_m"] == pytest.approx(300.0)
     assert result["longest_run_pct_race"] == pytest.approx(30.0 / 90.0 * 100, rel=0.01)
+
+
+def test_comrades_milestones_includes_gain_and_run_counts(mem_conn):
+    _insert_run(mem_conn, 1, "2024-03-11T07:00:00", 25.0, elevation=200.0)
+    _insert_run(mem_conn, 2, "2024-03-18T07:00:00", 22.0, elevation=150.0)
+    _insert_run(mem_conn, 3, "2024-03-25T07:00:00", 10.0, elevation=50.0)
+    result = metrics.comrades_milestones(mem_conn)
+    assert "total_gain_m" in result
+    assert result["total_gain_m"] == pytest.approx(400.0)
+    assert result["runs_20plus"] == 2
+    assert result["runs_30plus"] == 0
+
+
+def test_weekly_zone_time_aggregates_by_week(mem_conn):
+    _insert_run_with_streams(mem_conn, 1, "2024-03-11T07:00:00", 15.0, 145.0, 10.5, pct_z2=60.0)
+    df = metrics.weekly_zone_time(mem_conn)
+    assert not df.empty
+    assert "z2_min" in df.columns
+    # moving_time_min = 15km / 10.5 km/h * 60 = 85.7 min → z2 = 85.7 * 60% = 51.4
+    assert float(df.iloc[0]["z2_min"]) == pytest.approx(51.4, abs=1.0)
+
+
+def test_cadence_trend_returns_runs_with_cadence(mem_conn):
+    _insert_run_with_streams(mem_conn, 1, "2024-03-11T07:00:00", 10.0, 145.0, 10.5)
+    df = metrics.cadence_trend(mem_conn)
+    assert not df.empty
+    assert float(df.iloc[0]["cadence_avg"]) == pytest.approx(172.5)
+
+
+def test_long_run_history_filters_by_distance(mem_conn):
+    _insert_run(mem_conn, 1, "2024-03-11T07:00:00", 25.0)
+    _insert_run(mem_conn, 2, "2024-03-12T07:00:00", 10.0)
+    df = metrics.long_run_history(mem_conn, min_km=20.0)
+    assert len(df) == 1
+    assert float(df.iloc[0]["distance_km"]) == pytest.approx(25.0)
+
+
+def test_monthly_volume_groups_by_month(mem_conn):
+    _insert_run(mem_conn, 1, "2024-03-11T07:00:00", 15.0)
+    _insert_run(mem_conn, 2, "2024-03-18T07:00:00", 20.0)
+    _insert_run(mem_conn, 3, "2024-04-01T07:00:00", 10.0)
+    df = metrics.monthly_volume(mem_conn)
+    assert len(df) == 2
+    march = df[df["month_start"].astype(str).str.startswith("2024-03")]
+    assert float(march.iloc[0]["run_distance_km"]) == pytest.approx(35.0)
