@@ -8,8 +8,9 @@ import strava_client
 from db import get_conn, init_schema, upsert_streams_derived
 from streams import compute_streams_derived
 
-STREAMS_DISTANCE_THRESHOLD_KM = 15.0
-RATE_LIMIT_SLEEP = 0.5
+STREAMS_DISTANCE_THRESHOLD_KM = 0.0
+# Strava rate limit: 200 req/15min = ~13/min → 5s sleep keeps us safely under
+RATE_LIMIT_SLEEP = 5.0
 
 
 def run_backfill(conn=None) -> None:

@@ -243,7 +243,7 @@ def zone2_pace_trend(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
         JOIN activity_streams_derived sd ON a.id = sd.activity_id
         WHERE a.category = 'running'
           AND sd.pct_time_z2 >= 50
-          AND a.distance_km >= 10
+          AND a.distance_km >= 5
         ORDER BY a.start_date_local
     """).df()
 
