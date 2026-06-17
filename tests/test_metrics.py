@@ -152,3 +152,25 @@ def test_long_run_pct_of_weekly_volume(mem_conn):
     _insert_run(mem_conn, 2, "2024-03-13T07:00:00", 30.0)
     df = metrics.long_run_pct(mem_conn)
     assert df.iloc[0]["long_run_pct"] == pytest.approx(75.0)
+
+
+def test_plan_adherence_returns_dataframe(mem_conn):
+    from db import upsert_training_plan_week
+    from datetime import date
+    upsert_training_plan_week(mem_conn, {
+        "week_number": 1,
+        "week_start_date": date(2024, 3, 11),
+        "phase": "base",
+        "planned_distance_km": 50.0,
+        "planned_long_run_km": 18.0,
+        "planned_sessions": 5,
+        "is_deload": False,
+        "notes": "",
+    })
+    _insert_run(mem_conn, 999, "2024-03-13T07:00:00", 45.0)
+    df = metrics.plan_adherence(mem_conn)
+    assert isinstance(df, pd.DataFrame)
+    assert "adherence_pct" in df.columns
+    row = df[df["week_number"] == 1].iloc[0]
+    assert row["actual_distance_km"] == pytest.approx(45.0)
+    assert row["adherence_pct"] == pytest.approx(90.0)
