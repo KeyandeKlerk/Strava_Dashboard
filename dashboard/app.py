@@ -415,6 +415,37 @@ with col_ramp:
 
 st.divider()
 
+# ── Shoe Mileage ──────────────────────────────────────────────────────────────
+st.subheader("Shoe Mileage")
+
+_shoe_df = metrics.shoe_mileage(conn)
+
+if _shoe_df.empty:
+    _any_gear = conn.execute("SELECT COUNT(*) FROM activities WHERE gear_id IS NOT NULL").fetchone()[0]
+    if _any_gear == 0:
+        st.info("No shoe data yet — link your gear in Strava and run sync.")
+    else:
+        st.info("Gear synced but no shoe records in the gear table. Sync will populate them automatically.")
+else:
+    _shoe_cols = st.columns(min(len(_shoe_df), 4))
+    for _i, (_, _shoe) in enumerate(_shoe_df.iterrows()):
+        with _shoe_cols[_i % 4]:
+            _km       = float(_shoe["total_km"])
+            _thresh   = float(_shoe["retire_km_threshold"])
+            _remain   = float(_shoe["km_remaining"])
+            _pct      = min(1.0, _km / _thresh) if _thresh > 0 else 1.0
+            _flag_col = "🔴" if _remain < 0 else ("🟡" if _remain < 100 else "🟢")
+            st.markdown(f"**{_flag_col} {_shoe['name']}**")
+            _type_label = str(_shoe["type"]).capitalize() if _shoe["type"] and str(_shoe["type"]) != "None" else "Road"
+            st.caption(_type_label)
+            st.progress(_pct, text=f"{_km:.0f} / {_thresh:.0f} km")
+            if _remain < 0:
+                st.caption(f"⚠️ {abs(_remain):.0f} km over limit")
+            else:
+                st.caption(f"{_remain:.0f} km remaining")
+
+st.divider()
+
 # ── Training Load by Category ─────────────────────────────────────────────────
 st.subheader("Training Load by Category")
 
