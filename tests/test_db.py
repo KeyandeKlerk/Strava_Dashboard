@@ -156,3 +156,92 @@ def test_upsert_race_analysis_upserts(mem_conn):
         "SELECT comrades_projection_h FROM race_analysis WHERE race_event_id = ?", [rid]
     ).fetchone()
     assert row[0] == pytest.approx(9.8)
+    # Call again with updated projection — must overwrite, not insert a duplicate
+    upsert_race_analysis(mem_conn, {
+        "race_event_id": rid, "activity_id": 9999,
+        "avg_pace_min_km": 6.0, "comrades_projection_h": 9.5, "riegel_factor": 1.07,
+    })
+    rows = mem_conn.execute(
+        "SELECT comrades_projection_h FROM race_analysis WHERE race_event_id = ?", [rid]
+    ).fetchall()
+    assert len(rows) == 1
+    assert rows[0][0] == pytest.approx(9.5)
+
+
+def test_upsert_daily_session_inserts_and_updates(mem_conn):
+    from db import upsert_daily_session
+    session = {
+        "planned_date": "2026-09-14",
+        "week_number": 1,
+        "day_of_week": "Monday",
+        "session_type": "easy_run",
+        "planned_distance_km": 10.0,
+        "intensity": "easy",
+        "description": "Recovery jog",
+        "is_quality": False,
+    }
+    upsert_daily_session(mem_conn, session)
+    row = mem_conn.execute(
+        "SELECT session_type, planned_distance_km FROM training_plan_daily WHERE planned_date = '2026-09-14'"
+    ).fetchone()
+    assert row[0] == "easy_run"
+    assert row[1] == pytest.approx(10.0)
+    # Update same date — must overwrite
+    upsert_daily_session(mem_conn, {**session, "planned_distance_km": 12.0, "description": "Easy with strides"})
+    rows = mem_conn.execute(
+        "SELECT planned_distance_km FROM training_plan_daily WHERE planned_date = '2026-09-14'"
+    ).fetchall()
+    assert len(rows) == 1
+    assert rows[0][0] == pytest.approx(12.0)
+
+
+def test_correlate_activities_to_plan(mem_conn):
+    from db import upsert_daily_session, correlate_activities_to_plan
+    # Plant a planned run session
+    upsert_daily_session(mem_conn, {
+        "planned_date": "2026-09-15",
+        "week_number": 1,
+        "day_of_week": "Tuesday",
+        "session_type": "easy_run",
+        "planned_distance_km": 10.0,
+        "intensity": "easy",
+        "description": "Easy run",
+    })
+    # Plant a planned S&C session
+    upsert_daily_session(mem_conn, {
+        "planned_date": "2026-09-16",
+        "week_number": 1,
+        "day_of_week": "Wednesday",
+        "session_type": "sc",
+        "planned_distance_km": None,
+        "intensity": "moderate",
+        "description": "Gym",
+    })
+    # Insert matching activities
+    upsert_activity(mem_conn, {
+        "id": 5001, "name": "Easy run", "sport_type": "Run", "category": "running",
+        "start_date_local": "2026-09-15T07:00:00", "distance_km": 10.5,
+        "moving_time_min": 60.0, "elapsed_time_min": 62.0, "elevation_gain_m": 50.0,
+        "average_heartrate": 140.0, "max_heartrate": 155.0, "average_cadence": 172.0,
+        "average_speed_kmh": 10.5, "relative_effort": 60.0, "load_score": 60.0,
+    })
+    upsert_activity(mem_conn, {
+        "id": 5002, "name": "Gym", "sport_type": "WeightTraining", "category": "gym",
+        "start_date_local": "2026-09-16T09:00:00", "distance_km": None,
+        "moving_time_min": 45.0, "elapsed_time_min": 50.0, "elevation_gain_m": None,
+        "average_heartrate": None, "max_heartrate": None, "average_cadence": None,
+        "average_speed_kmh": None, "relative_effort": None, "load_score": None,
+    })
+    completed = correlate_activities_to_plan(mem_conn)
+    assert completed == 2
+    run_row = mem_conn.execute(
+        "SELECT completed, completed_activity_id, completed_distance_km FROM training_plan_daily WHERE planned_date = '2026-09-15'"
+    ).fetchone()
+    assert run_row[0] is True
+    assert run_row[1] == 5001
+    assert run_row[2] == pytest.approx(10.5)
+    gym_row = mem_conn.execute(
+        "SELECT completed, completed_activity_id FROM training_plan_daily WHERE planned_date = '2026-09-16'"
+    ).fetchone()
+    assert gym_row[0] is True
+    assert gym_row[1] == 5002
