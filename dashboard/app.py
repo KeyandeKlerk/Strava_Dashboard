@@ -325,6 +325,47 @@ with rc4:
     )
     st.caption("Longest run as % of weekly volume. Above **35% risks ITB** — spread load across more sessions.")
 
+# CTL/ATL/TSB chart (full width)
+_tsb_df = metrics.ctl_atl_tsb_history(conn)
+if not _tsb_df.empty:
+    _tsb_df = _tsb_df.sort_values("day")
+    _fig_tsb = go.Figure()
+    _fig_tsb.add_trace(go.Scatter(
+        x=_tsb_df["day"], y=_tsb_df["ctl"],
+        name="CTL (Fitness)", mode="lines",
+        line=dict(color="#2196F3", width=2),
+    ))
+    _fig_tsb.add_trace(go.Scatter(
+        x=_tsb_df["day"], y=_tsb_df["atl"],
+        name="ATL (Fatigue)", mode="lines",
+        line=dict(color="#f44336", width=2),
+    ))
+    _fig_tsb.add_trace(go.Scatter(
+        x=_tsb_df["day"], y=_tsb_df["tsb"],
+        name="TSB (Form)", mode="lines",
+        fill="tozeroy",
+        line=dict(color="#4CAF50", width=1),
+        yaxis="y2",
+        fillcolor="rgba(76,175,80,0.15)",
+    ))
+    # Race event markers
+    for _re in get_all_race_events(conn):
+        _fig_tsb.add_vline(
+            x=str(_re["race_date"]),
+            line_dash="dash", line_color="orange", line_width=1,
+            annotation_text=_re["name"][:12],
+            annotation_position="top",
+        )
+    _fig_tsb.update_layout(
+        title="CTL / ATL / TSB — Fitness, Fatigue & Form",
+        height=360,
+        yaxis=dict(title="Load units (CTL/ATL)"),
+        yaxis2=dict(title="Form (TSB)", overlaying="y", side="right", zeroline=True),
+        legend=dict(orientation="h"),
+    )
+    st.plotly_chart(_fig_tsb, use_container_width=True)
+
+# ACWR and ramp rate side by side (retained)
 col_acwr, col_ramp = st.columns(2)
 
 with col_acwr:
