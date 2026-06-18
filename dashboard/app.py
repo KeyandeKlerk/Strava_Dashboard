@@ -485,108 +485,137 @@ zone_df = metrics.weekly_zone_time(conn)
 z2_df = metrics.zone2_pace_trend(conn)
 cad_df = metrics.cadence_trend(conn)
 
-if not zone_df.empty:
-    zone_sorted = zone_df.sort_values("week_start").copy()
-    zone_cols = ["z1_min", "z2_min", "z3_min", "z4_min", "z5_min"]
-    zone_sorted["total_min"] = zone_sorted[zone_cols].sum(axis=1)
-    zone_sorted["easy_pct"] = (
-        (zone_sorted["z1_min"] + zone_sorted["z2_min"])
-        / zone_sorted["total_min"].replace(0, float("nan")) * 100
-    )
-    latest_easy_pct = float(zone_sorted["easy_pct"].dropna().iloc[-1]) if zone_sorted["easy_pct"].notna().any() else None
+_tab_aerobic, _tab_quality = st.tabs(["Zone Analysis", "Long Run Quality"])
 
-    z_col, compliance_col = st.columns([3, 1])
-
-    with z_col:
-        zone_melt = zone_sorted.melt(
-            id_vars="week_start",
-            value_vars=zone_cols,
-            var_name="zone",
-            value_name="minutes",
+with _tab_aerobic:
+    if not zone_df.empty:
+        zone_sorted = zone_df.sort_values("week_start").copy()
+        zone_cols = ["z1_min", "z2_min", "z3_min", "z4_min", "z5_min"]
+        zone_sorted["total_min"] = zone_sorted[zone_cols].sum(axis=1)
+        zone_sorted["easy_pct"] = (
+            (zone_sorted["z1_min"] + zone_sorted["z2_min"])
+            / zone_sorted["total_min"].replace(0, float("nan")) * 100
         )
-        zone_melt["zone"] = zone_melt["zone"].str.replace("_min", "").str.upper()
-        fig_zones = px.bar(
-            zone_melt, x="week_start", y="minutes", color="zone",
-            title="Weekly Running Time in HR Zones",
-            labels={"minutes": "Minutes", "week_start": "Week", "zone": "Zone"},
-            color_discrete_map={
-                "Z1": "#4fc3f7",
-                "Z2": "#66bb6a",
-                "Z3": "#ffa726",
-                "Z4": "#ef5350",
-                "Z5": "#ab47bc",
+        latest_easy_pct = float(zone_sorted["easy_pct"].dropna().iloc[-1]) if zone_sorted["easy_pct"].notna().any() else None
+
+        z_col, compliance_col = st.columns([3, 1])
+
+        with z_col:
+            zone_melt = zone_sorted.melt(
+                id_vars="week_start",
+                value_vars=zone_cols,
+                var_name="zone",
+                value_name="minutes",
+            )
+            zone_melt["zone"] = zone_melt["zone"].str.replace("_min", "").str.upper()
+            fig_zones = px.bar(
+                zone_melt, x="week_start", y="minutes", color="zone",
+                title="Weekly Running Time in HR Zones",
+                labels={"minutes": "Minutes", "week_start": "Week", "zone": "Zone"},
+                color_discrete_map={
+                    "Z1": "#4fc3f7",
+                    "Z2": "#66bb6a",
+                    "Z3": "#ffa726",
+                    "Z4": "#ef5350",
+                    "Z5": "#ab47bc",
+                },
+            )
+            fig_zones.update_layout(height=320, legend=dict(orientation="h"))
+            st.plotly_chart(fig_zones, use_container_width=True)
+
+        with compliance_col:
+            st.metric(
+                f"{_flag(latest_easy_pct, 75, 85)} 80/20 Compliance",
+                f"{latest_easy_pct:.0f}%" if latest_easy_pct is not None else "—",
+            )
+            st.caption("% of run time in Z1+Z2. Target **75–85%** for polarized ultra training.")
+            fig_easy = px.line(
+                zone_sorted.dropna(subset=["easy_pct"]),
+                x="week_start", y="easy_pct",
+                labels={"easy_pct": "Easy %", "week_start": "Week"},
+            )
+            fig_easy.add_hline(y=80, line_dash="dash", line_color="green", line_width=1,
+                               annotation_text="80% target")
+            fig_easy.update_layout(height=220, margin=dict(t=10, b=10))
+            st.plotly_chart(fig_easy, use_container_width=True)
+
+    col_a, col_b, col_c = st.columns(3)
+
+    with col_a:
+        if not z2_df.empty:
+            fig_z2 = px.scatter(
+                z2_df,
+                x="activity_date", y="pace_min_per_km",
+                trendline="ols",
+                title="Zone 2 Pace (min/km)",
+                labels={"pace_min_per_km": "Pace (min/km)", "activity_date": "Date"},
+                hover_data=["name", "distance_km", "average_heartrate"],
+            )
+            fig_z2.update_layout(height=300)
+            st.plotly_chart(fig_z2, use_container_width=True)
+        else:
+            st.info("No streams data yet. Run `python src/backfill.py`.")
+
+    with col_b:
+        if not z2_df.empty:
+            fig_decoup = px.bar(
+                z2_df.tail(20),
+                x="activity_date", y="decoupling_pct",
+                title="Aerobic Decoupling % (last 20)",
+                labels={"decoupling_pct": "Decoupling %", "activity_date": "Date"},
+                color="decoupling_pct",
+                color_continuous_scale=["green", "yellow", "red"],
+                range_color=[-5, 5],
+            )
+            fig_decoup.add_hline(y=5, line_dash="dash", line_color="red",
+                                 annotation_text=">5% = poor efficiency")
+            fig_decoup.update_layout(height=300, showlegend=False)
+            st.plotly_chart(fig_decoup, use_container_width=True)
+
+    with col_c:
+        if not cad_df.empty:
+            fig_cad = px.scatter(
+                cad_df,
+                x="activity_date", y="cadence_avg",
+                trendline="ols",
+                title="Cadence Trend (spm)",
+                labels={"cadence_avg": "Cadence (spm)", "activity_date": "Date"},
+                hover_data=["name", "distance_km"],
+            )
+            fig_cad.add_hline(y=170, line_dash="dash", line_color="orange", line_width=1,
+                              annotation_text="170 min target")
+            fig_cad.add_hline(y=180, line_dash="dash", line_color="green", line_width=1,
+                              annotation_text="180 optimal")
+            fig_cad.update_layout(height=300)
+            st.plotly_chart(fig_cad, use_container_width=True)
+        else:
+            st.info("No cadence data yet. Run `python src/backfill.py`.")
+
+with _tab_quality:
+    _lrq_df = metrics.long_run_quality_scores(conn)
+    if not _lrq_df.empty:
+        _fig_lrq = px.scatter(
+            _lrq_df,
+            x="activity_date",
+            y="quality_score",
+            size="distance_km",
+            color="quality_score",
+            color_continuous_scale=["red", "orange", "green"],
+            range_color=[0, 100],
+            trendline="ols",
+            hover_data=["name", "distance_km", "z2_compliance_pct", "decoupling_pct"],
+            title="Long Run Quality Score (≥20 km runs)",
+            labels={
+                "quality_score": "Quality Score",
+                "activity_date": "Date",
+                "distance_km": "Distance (km)",
             },
         )
-        fig_zones.update_layout(height=320, legend=dict(orientation="h"))
-        st.plotly_chart(fig_zones, use_container_width=True)
-
-    with compliance_col:
-        st.metric(
-            f"{_flag(latest_easy_pct, 75, 85)} 80/20 Compliance",
-            f"{latest_easy_pct:.0f}%" if latest_easy_pct is not None else "—",
-        )
-        st.caption("% of run time in Z1+Z2. Target **75–85%** for polarized ultra training.")
-        fig_easy = px.line(
-            zone_sorted.dropna(subset=["easy_pct"]),
-            x="week_start", y="easy_pct",
-            labels={"easy_pct": "Easy %", "week_start": "Week"},
-        )
-        fig_easy.add_hline(y=80, line_dash="dash", line_color="green", line_width=1,
-                           annotation_text="80% target")
-        fig_easy.update_layout(height=220, margin=dict(t=10, b=10))
-        st.plotly_chart(fig_easy, use_container_width=True)
-
-col_a, col_b, col_c = st.columns(3)
-
-with col_a:
-    if not z2_df.empty:
-        fig_z2 = px.scatter(
-            z2_df,
-            x="activity_date", y="pace_min_per_km",
-            trendline="ols",
-            title="Zone 2 Pace (min/km)",
-            labels={"pace_min_per_km": "Pace (min/km)", "activity_date": "Date"},
-            hover_data=["name", "distance_km", "average_heartrate"],
-        )
-        fig_z2.update_layout(height=300)
-        st.plotly_chart(fig_z2, use_container_width=True)
+        _fig_lrq.update_layout(height=380)
+        st.plotly_chart(_fig_lrq, use_container_width=True)
+        st.caption("Score 0–100: Z2 compliance (50%) + aerobic decoupling (50%). Larger dot = longer run.")
     else:
-        st.info("No streams data yet. Run `python src/backfill.py`.")
-
-with col_b:
-    if not z2_df.empty:
-        fig_decoup = px.bar(
-            z2_df.tail(20),
-            x="activity_date", y="decoupling_pct",
-            title="Aerobic Decoupling % (last 20)",
-            labels={"decoupling_pct": "Decoupling %", "activity_date": "Date"},
-            color="decoupling_pct",
-            color_continuous_scale=["green", "yellow", "red"],
-            range_color=[-5, 5],
-        )
-        fig_decoup.add_hline(y=5, line_dash="dash", line_color="red",
-                             annotation_text=">5% = poor efficiency")
-        fig_decoup.update_layout(height=300, showlegend=False)
-        st.plotly_chart(fig_decoup, use_container_width=True)
-
-with col_c:
-    if not cad_df.empty:
-        fig_cad = px.scatter(
-            cad_df,
-            x="activity_date", y="cadence_avg",
-            trendline="ols",
-            title="Cadence Trend (spm)",
-            labels={"cadence_avg": "Cadence (spm)", "activity_date": "Date"},
-            hover_data=["name", "distance_km"],
-        )
-        fig_cad.add_hline(y=170, line_dash="dash", line_color="orange", line_width=1,
-                          annotation_text="170 min target")
-        fig_cad.add_hline(y=180, line_dash="dash", line_color="green", line_width=1,
-                          annotation_text="180 optimal")
-        fig_cad.update_layout(height=300)
-        st.plotly_chart(fig_cad, use_container_width=True)
-    else:
-        st.info("No cadence data yet. Run `python src/backfill.py`.")
+        st.info("No long runs ≥20 km with stream data yet. Run `python src/backfill.py` to populate.")
 
 st.divider()
 
