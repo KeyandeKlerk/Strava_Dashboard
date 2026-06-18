@@ -97,3 +97,62 @@ def test_upsert_streams_derived(mem_conn):
     ).fetchone()
     assert row[0] == pytest.approx(88.5)
     assert row[1] == pytest.approx(55.0)
+
+
+def test_init_schema_creates_race_events(mem_conn):
+    tables = {t[0] for t in mem_conn.execute("SHOW TABLES").fetchall()}
+    assert "race_events" in tables
+
+def test_init_schema_creates_training_blocks(mem_conn):
+    tables = {t[0] for t in mem_conn.execute("SHOW TABLES").fetchall()}
+    assert "training_blocks" in tables
+
+def test_init_schema_creates_gear(mem_conn):
+    tables = {t[0] for t in mem_conn.execute("SHOW TABLES").fetchall()}
+    assert "gear" in tables
+
+def test_init_schema_creates_race_analysis(mem_conn):
+    tables = {t[0] for t in mem_conn.execute("SHOW TABLES").fetchall()}
+    assert "race_analysis" in tables
+
+def test_activities_has_gear_columns(mem_conn):
+    cols = {c[0] for c in mem_conn.execute("DESCRIBE activities").fetchall()}
+    assert "gear_id" in cols
+    assert "gear_name" in cols
+
+def test_upsert_race_event_inserts_and_returns_id(mem_conn):
+    from db import upsert_race_event
+    event = {
+        "name": "Two Oceans Ultra",
+        "race_date": "2026-04-19",
+        "distance_km": 56.0,
+        "priority": "A",
+        "target_finish_h": 6.5,
+    }
+    rid = upsert_race_event(mem_conn, event)
+    assert isinstance(rid, int)
+    row = mem_conn.execute("SELECT name, priority FROM race_events WHERE id = ?", [rid]).fetchone()
+    assert row[0] == "Two Oceans Ultra"
+    assert row[1] == "A"
+
+def test_upsert_gear_inserts_once(mem_conn):
+    from db import upsert_gear
+    upsert_gear(mem_conn, "g123", "Nike Alphafly")
+    upsert_gear(mem_conn, "g123", "Nike Alphafly")  # duplicate — must not raise
+    count = mem_conn.execute("SELECT COUNT(*) FROM gear WHERE id = 'g123'").fetchone()[0]
+    assert count == 1
+
+def test_upsert_race_analysis_upserts(mem_conn):
+    from db import upsert_race_event, upsert_race_analysis
+    rid = upsert_race_event(mem_conn, {
+        "name": "Test Race", "race_date": "2026-04-19",
+        "distance_km": 42.2, "priority": "B",
+    })
+    upsert_race_analysis(mem_conn, {
+        "race_event_id": rid, "activity_id": 9999,
+        "avg_pace_min_km": 6.1, "comrades_projection_h": 9.8, "riegel_factor": 1.06,
+    })
+    row = mem_conn.execute(
+        "SELECT comrades_projection_h FROM race_analysis WHERE race_event_id = ?", [rid]
+    ).fetchone()
+    assert row[0] == pytest.approx(9.8)

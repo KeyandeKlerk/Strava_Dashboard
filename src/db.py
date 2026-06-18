@@ -58,11 +58,82 @@ def init_schema(conn: duckdb.DuckDBPyConnection) -> None:
         )
     """)
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS training_plan_daily (
+            planned_date          DATE PRIMARY KEY,
+            week_number           INTEGER,
+            day_of_week           VARCHAR,
+            session_type          VARCHAR,
+            planned_distance_km   DOUBLE,
+            intensity             VARCHAR,
+            description           TEXT,
+            is_quality            BOOLEAN DEFAULT FALSE,
+            completed             BOOLEAN DEFAULT FALSE,
+            completed_activity_id BIGINT,
+            completed_distance_km DOUBLE
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS sync_state (
             key VARCHAR PRIMARY KEY,
             value VARCHAR
         )
     """)
+    conn.execute("""
+        CREATE SEQUENCE IF NOT EXISTS race_events_id_seq START 1
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS race_events (
+            id INTEGER PRIMARY KEY DEFAULT nextval('race_events_id_seq'),
+            name VARCHAR NOT NULL,
+            race_date DATE NOT NULL,
+            distance_km DOUBLE NOT NULL,
+            priority VARCHAR NOT NULL,
+            target_finish_h DOUBLE,
+            notes VARCHAR,
+            strava_activity_id BIGINT
+        )
+    """)
+    conn.execute("""
+        CREATE SEQUENCE IF NOT EXISTS training_blocks_id_seq START 1
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS training_blocks (
+            id INTEGER PRIMARY KEY DEFAULT nextval('training_blocks_id_seq'),
+            block_type VARCHAR NOT NULL,
+            start_date DATE NOT NULL,
+            end_date DATE NOT NULL,
+            target_weekly_km DOUBLE,
+            phase_label VARCHAR,
+            race_event_id INTEGER
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS gear (
+            id VARCHAR PRIMARY KEY,
+            name VARCHAR NOT NULL,
+            type VARCHAR DEFAULT 'road',
+            added_date DATE,
+            retire_km_threshold DOUBLE DEFAULT 800.0,
+            is_retired BOOLEAN DEFAULT FALSE,
+            notes VARCHAR
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS race_analysis (
+            race_event_id INTEGER PRIMARY KEY,
+            activity_id BIGINT NOT NULL,
+            avg_pace_min_km DOUBLE,
+            comrades_projection_h DOUBLE,
+            riegel_factor DOUBLE,
+            computed_at TIMESTAMP DEFAULT current_timestamp
+        )
+    """)
+    # Add gear columns to activities if missing
+    for col, col_type in [("gear_id", "VARCHAR"), ("gear_name", "VARCHAR")]:
+        try:
+            conn.execute(f"ALTER TABLE activities ADD COLUMN {col} {col_type}")
+        except Exception:
+            pass
 
 
 def upsert_activity(conn: duckdb.DuckDBPyConnection, activity: dict) -> None:
@@ -146,6 +217,64 @@ def upsert_training_plan_week(conn: duckdb.DuckDBPyConnection, week: dict) -> No
     ])
 
 
+def upsert_daily_session(conn: duckdb.DuckDBPyConnection, session: dict) -> None:
+    conn.execute("""
+        INSERT INTO training_plan_daily (
+            planned_date, week_number, day_of_week, session_type,
+            planned_distance_km, intensity, description, is_quality
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (planned_date) DO UPDATE SET
+            week_number         = excluded.week_number,
+            day_of_week         = excluded.day_of_week,
+            session_type        = excluded.session_type,
+            planned_distance_km = excluded.planned_distance_km,
+            intensity           = excluded.intensity,
+            description         = excluded.description,
+            is_quality          = excluded.is_quality
+    """, [
+        session["planned_date"], session["week_number"], session["day_of_week"],
+        session["session_type"], session.get("planned_distance_km"),
+        session["intensity"], session["description"], session.get("is_quality", False),
+    ])
+
+
+def correlate_activities_to_plan(conn: duckdb.DuckDBPyConnection) -> int:
+    """Match Strava activities to planned sessions by date. Returns total completed count."""
+    # Best run per day → running sessions
+    conn.execute("""
+        UPDATE training_plan_daily d
+        SET completed             = TRUE,
+            completed_activity_id = a.id,
+            completed_distance_km = a.distance_km
+        FROM (
+            SELECT start_date_local::DATE AS run_date,
+                   ARG_MAX(id, distance_km) AS id,
+                   MAX(distance_km)         AS distance_km
+            FROM activities
+            WHERE category = 'running'
+            GROUP BY 1
+        ) a
+        WHERE d.planned_date = a.run_date
+          AND d.session_type IN ('easy_run', 'quality_run', 'long_run', 'hills', 'race')
+    """)
+    # Gym activity → S&C sessions
+    conn.execute("""
+        UPDATE training_plan_daily d
+        SET completed             = TRUE,
+            completed_activity_id = a.id
+        FROM (
+            SELECT start_date_local::DATE AS gym_date, MIN(id) AS id
+            FROM activities WHERE category = 'gym'
+            GROUP BY 1
+        ) a
+        WHERE d.planned_date = a.gym_date
+          AND d.session_type = 'sc'
+    """)
+    return conn.execute(
+        "SELECT COUNT(*) FROM training_plan_daily WHERE completed"
+    ).fetchone()[0]
+
+
 def get_last_synced(conn: duckdb.DuckDBPyConnection) -> Optional[int]:
     result = conn.execute(
         "SELECT value FROM sync_state WHERE key = 'last_synced_at'"
@@ -158,3 +287,65 @@ def set_last_synced(conn: duckdb.DuckDBPyConnection, timestamp: int) -> None:
         INSERT INTO sync_state (key, value) VALUES ('last_synced_at', ?)
         ON CONFLICT (key) DO UPDATE SET value = excluded.value
     """, [str(timestamp)])
+
+
+def upsert_race_event(conn: duckdb.DuckDBPyConnection, event: dict) -> int:
+    if event.get("id"):
+        conn.execute("""
+            UPDATE race_events
+            SET name = ?, race_date = ?, distance_km = ?, priority = ?,
+                target_finish_h = ?, notes = ?
+            WHERE id = ?
+        """, [event["name"], event["race_date"], event["distance_km"],
+              event["priority"], event.get("target_finish_h"),
+              event.get("notes"), event["id"]])
+        return int(event["id"])
+    result = conn.execute("""
+        INSERT INTO race_events (name, race_date, distance_km, priority, target_finish_h, notes)
+        VALUES (?, ?, ?, ?, ?, ?)
+        RETURNING id
+    """, [event["name"], event["race_date"], event["distance_km"],
+          event["priority"], event.get("target_finish_h"), event.get("notes")]).fetchone()
+    return int(result[0])
+
+
+def stamp_race_activity(conn: duckdb.DuckDBPyConnection, race_event_id: int, strava_activity_id: int) -> None:
+    conn.execute(
+        "UPDATE race_events SET strava_activity_id = ? WHERE id = ?",
+        [strava_activity_id, race_event_id],
+    )
+
+
+def upsert_gear(conn: duckdb.DuckDBPyConnection, gear_id: str, gear_name: str) -> None:
+    conn.execute(
+        "INSERT INTO gear (id, name) VALUES (?, ?) ON CONFLICT (id) DO NOTHING",
+        [gear_id, gear_name],
+    )
+
+
+def upsert_race_analysis(conn: duckdb.DuckDBPyConnection, analysis: dict) -> None:
+    conn.execute("""
+        INSERT INTO race_analysis
+            (race_event_id, activity_id, avg_pace_min_km, comrades_projection_h, riegel_factor, computed_at)
+        VALUES (?, ?, ?, ?, ?, now())
+        ON CONFLICT (race_event_id) DO UPDATE SET
+            activity_id           = excluded.activity_id,
+            avg_pace_min_km       = excluded.avg_pace_min_km,
+            comrades_projection_h = excluded.comrades_projection_h,
+            riegel_factor         = excluded.riegel_factor,
+            computed_at           = excluded.computed_at
+    """, [analysis["race_event_id"], analysis["activity_id"],
+          analysis.get("avg_pace_min_km"), analysis["comrades_projection_h"],
+          analysis.get("riegel_factor")])
+
+
+def get_all_race_events(conn: duckdb.DuckDBPyConnection) -> list[dict]:
+    rows = conn.execute("""
+        SELECT id, name, race_date, distance_km, priority,
+               target_finish_h, notes, strava_activity_id
+        FROM race_events
+        ORDER BY race_date
+    """).fetchall()
+    cols = ["id", "name", "race_date", "distance_km", "priority",
+            "target_finish_h", "notes", "strava_activity_id"]
+    return [dict(zip(cols, r)) for r in rows]
