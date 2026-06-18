@@ -9,7 +9,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from db import get_conn, init_schema
+from db import get_conn, init_schema, upsert_race_event, get_all_race_events
+from periodization import build_plan
 import metrics
 
 RACE_DATE = date(2027, 6, 13)
@@ -24,11 +25,35 @@ conn = get_conn()
 init_schema(conn)
 
 # ── Header Row ────────────────────────────────────────────────────────────────
+_FILTER_MIN = date(2026, 1, 1)
+
 days_to_race = (RACE_DATE - date.today()).days
 cur = metrics.current_week_stats(conn)
 
-st.title("Comrades 2027 — Training Dashboard")
-st.caption("Down Run · Pietermaritzburg → Durban · 13 June 2027")
+_title_col, _filter_col = st.columns([3, 2])
+with _title_col:
+    st.title("Comrades 2027 — Training Dashboard")
+    st.caption("Down Run · Pietermaritzburg → Durban · 13 June 2027")
+
+with _filter_col:
+    st.markdown("<div style='padding-top:18px'></div>", unsafe_allow_html=True)
+    _range = st.date_input(
+        "Filter charts by date range",
+        value=(_FILTER_MIN, date.today()),
+        min_value=_FILTER_MIN,
+        max_value=RACE_DATE,
+        format="YYYY-MM-DD",
+    )
+
+if isinstance(_range, (list, tuple)) and len(_range) == 2:
+    _since, _until = _range
+elif isinstance(_range, (list, tuple)) and len(_range) == 1:
+    _since, _until = _range[0], date.today()
+else:
+    _since, _until = (_range if isinstance(_range, date) else _FILTER_MIN), date.today()
+
+metrics.TRAINING_START = _since.isoformat()
+metrics.TRAINING_END   = _until.isoformat()
 
 c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Days to Race", days_to_race)
@@ -39,6 +64,89 @@ c4.metric(
     f"{cur['adherence_pct']:.0f}%" if cur["planned_km"] else "—",
 )
 c5.metric("Phase", cur["phase"])
+
+st.divider()
+
+# ── Race Calendar ─────────────────────────────────────────────────────────────
+st.subheader("Race Calendar")
+
+_race_events = get_all_race_events(conn)
+
+if _race_events:
+    _re_rows = []
+    for _re in _race_events:
+        _status = "upcoming"
+        if _re["strava_activity_id"]:
+            _status = "analysed"
+        elif _re["race_date"] < date.today():
+            _status = "completed"
+        _re_rows.append({
+            "Name":       _re["name"],
+            "Date":       _re["race_date"],
+            "Dist (km)":  _re["distance_km"],
+            "Priority":   _re["priority"],
+            "Target (h)": f"{_re['target_finish_h']:.1f}" if _re["target_finish_h"] else "—",
+            "Status":     _status,
+        })
+    st.dataframe(
+        pd.DataFrame(_re_rows),
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Date": st.column_config.DateColumn("Date"),
+            "Dist (km)": st.column_config.NumberColumn(format="%.1f"),
+        },
+    )
+
+    # Analysis panels for completed + analysed races
+    _analysed = [r for r in _race_events if r["strava_activity_id"]]
+    if _analysed:
+        for _ar in _analysed:
+            with st.expander(f"Race analysis — {_ar['name']} ({_ar['race_date']})"):
+                _ra = conn.execute(
+                    "SELECT avg_pace_min_km, comrades_projection_h, computed_at FROM race_analysis WHERE race_event_id = ?",
+                    [_ar["id"]],
+                ).fetchone()
+                if _ra:
+                    _ra_c1, _ra_c2, _ra_c3 = st.columns(3)
+                    _ra_c1.metric("Avg Pace", f"{_ra[0]:.2f} min/km" if _ra[0] else "—")
+                    _ra_c2.metric("Comrades Projection", f"{_ra[1]:.2f} h" if _ra[1] else "—")
+                    _ra_c3.metric("Analysed", str(_ra[2])[:10] if _ra[2] else "—")
+                else:
+                    st.info("No analysis data yet — run sync after the race.")
+else:
+    st.info("No races scheduled yet. Add one below.")
+
+with st.expander("Add race"):
+    with st.form("add_race_form"):
+        _f_name     = st.text_input("Race name", placeholder="e.g. Two Oceans Ultra")
+        _f_date     = st.date_input("Race date", value=date.today())
+        _f_dist     = st.number_input("Distance (km)", min_value=1.0, max_value=250.0, value=42.2, step=0.1)
+        _f_priority = st.selectbox("Priority", ["A", "B"])
+        _f_target   = st.number_input("Target finish (h)", min_value=0.0, max_value=24.0, value=0.0, step=0.25,
+                                      help="0 = no target set")
+        _f_notes    = st.text_area("Notes", placeholder="Course notes, goal, etc.")
+        _submitted  = st.form_submit_button("Save & rebuild plan")
+
+    if _submitted and _f_name.strip():
+        _new_event = {
+            "name":           _f_name.strip(),
+            "race_date":      _f_date.isoformat(),
+            "distance_km":    float(_f_dist),
+            "priority":       _f_priority,
+            "target_finish_h": float(_f_target) if _f_target > 0 else None,
+            "notes":          _f_notes.strip() or None,
+        }
+        upsert_race_event(conn, _new_event)
+        _all_events = get_all_race_events(conn)
+        try:
+            build_plan(conn, RACE_DATE, _all_events)
+            st.success(f"Race '{_f_name}' saved and training plan rebuilt.")
+        except Exception as _e:
+            st.error(f"Race saved but plan rebuild failed: {_e}")
+        st.rerun()
+    elif _submitted:
+        st.warning("Race name is required.")
 
 st.divider()
 
@@ -553,30 +661,129 @@ if not recent_df.empty:
 else:
     st.info("No activities to display.")
 
-# ── Training Plan Editor ──────────────────────────────────────────────────────
-with st.expander("Training Plan (click to expand & edit)", expanded=False):
-    adh_df = metrics.plan_adherence(conn)
+# ── Training Plan ─────────────────────────────────────────────────────────────
+st.subheader("Training Plan")
 
-    if not adh_df.empty:
+_ICON = {
+    "rest":        "⬜",
+    "sc":          "💪",
+    "easy_run":    "🟢",
+    "quality_run": "🟡",
+    "long_run":    "🔵",
+    "hills":       "🟠",
+    "cricket":     "🏏",
+    "race":        "🏆",
+}
+_INTENSITY_LABEL = {
+    "easy": "Easy", "moderate": "Moderate", "hard": "Hard", "race": "RACE", "rest": "—",
+}
+
+week_summary = metrics.weekly_completion_summary(conn)
+
+if week_summary.empty:
+    st.info(
+        "No plan loaded yet. Add a race via the Race Calendar section above, "
+        "or run `build_plan(conn, RACE_DATE, [])` from a Python console."
+    )
+else:
+    # ── Week selector ─────────────────────────────────────────────────────────
+    today = date.today()
+
+    def _week_label(row):
+        start = row["week_start_date"]
+        # pandas Timestamp → date
+        if hasattr(start, "date"):
+            start = start.date()
+        end = start + __import__("datetime").timedelta(days=6)
+        deload_tag = " [DELOAD]" if row["is_deload"] else ""
+        done = int(row["days_done"])
+        total = int(row["total_days"])
+        return (f"Wk {int(row['week_number']):02d}  {start.strftime('%b %d')}–{end.strftime('%d')}"
+                f"  ·  {row['phase']}{deload_tag}  ·  {done}/{total} done")
+
+    labels      = [_week_label(r) for _, r in week_summary.iterrows()]
+    week_nums   = week_summary["week_number"].tolist()
+
+    # Default to the week containing today
+    starts = week_summary["week_start_date"].tolist()
+    default_idx = 0
+    for i, s in enumerate(starts):
+        s_date = s.date() if hasattr(s, "date") else s
+        if s_date <= today < s_date + __import__("datetime").timedelta(days=7):
+            default_idx = i
+            break
+
+    col_sel, col_prog = st.columns([3, 2])
+
+    with col_sel:
+        selected_idx = st.selectbox(
+            "Week",
+            options=list(range(len(labels))),
+            format_func=lambda i: labels[i],
+            index=default_idx,
+            label_visibility="collapsed",
+        )
+
+    selected_week_num = week_nums[selected_idx]
+    sel_row = week_summary.iloc[selected_idx]
+
+    with col_prog:
+        done_runs  = int(sel_row["run_days_done"])
+        total_runs = int(sel_row["run_days"])
+        pct        = int(sel_row["completion_pct"] or 0)
+        st.progress(pct / 100, text=f"{done_runs}/{total_runs} runs done · {pct}% complete")
+
+    # ── Weekly overview strip ─────────────────────────────────────────────────
+    with st.expander("All weeks — overview", expanded=False):
+        disp = week_summary[
+            ["week_number", "week_start_date", "phase", "planned_distance_km",
+             "run_days_done", "run_days", "completion_pct", "is_deload"]
+        ].copy()
+        disp.columns = ["Week", "Mon", "Phase", "Plan km",
+                        "Runs done", "Run days", "Done %", "Deload"]
         st.dataframe(
-            adh_df,
+            disp,
             use_container_width=True,
             hide_index=True,
             column_config={
-                "week_start_date": st.column_config.DateColumn("Week Start"),
-                "week_number": st.column_config.NumberColumn("Week #", format="%d"),
-                "phase": "Phase",
-                "planned_distance_km": st.column_config.NumberColumn("Planned (km)", format="%.1f"),
-                "actual_distance_km": st.column_config.NumberColumn("Actual (km)", format="%.1f"),
-                "adherence_pct": st.column_config.NumberColumn("Adherence %", format="%.1f"),
-                "is_deload": st.column_config.CheckboxColumn("Deload?"),
+                "Mon":     st.column_config.DateColumn("Week start"),
+                "Plan km": st.column_config.NumberColumn(format="%.0f"),
+                "Done %":  st.column_config.ProgressColumn(min_value=0, max_value=100),
+                "Deload":  st.column_config.CheckboxColumn(),
             },
         )
-    else:
-        st.info("Training plan is empty. Populate the training_plan table to track adherence.")
 
-    st.caption(
-        "To populate the plan: call `db.upsert_training_plan_week()` from a script "
-        "or import a CSV. The week-by-week targets are a separate follow-up task "
-        "once real data is flowing."
-    )
+    # ── Daily drill-down ──────────────────────────────────────────────────────
+    daily = metrics.daily_plan_for_week(conn, selected_week_num)
+
+    if daily.empty:
+        st.info("No daily sessions yet — run `python src/generate_daily_plan.py`.")
+    else:
+        # Header row
+        h0, h1, h2, h3, h4, h5 = st.columns([1, 2, 3, 2, 2, 8])
+        h0.markdown("**·**")
+        h1.markdown("**Day**")
+        h2.markdown("**Session**")
+        h3.markdown("**Planned**")
+        h4.markdown("**Actual**")
+        h5.markdown("**Notes**")
+        st.markdown("<hr style='margin:4px 0'>", unsafe_allow_html=True)
+
+        for _, r in daily.iterrows():
+            icon    = _ICON.get(str(r["session_type"]), "⬜")
+            _pdate  = r["planned_date"]
+            _pdate  = _pdate.date() if hasattr(_pdate, "date") else _pdate
+            status  = "✅" if r["completed"] else ("⏳" if _pdate >= today else "❌")
+            plan_d  = f"{r['planned_km']:.0f} km" if r["planned_km"] and r["planned_km"] > 0 else "—"
+            actual_d = f"{r['actual_km']:.1f} km" if r["actual_km"] else "—"
+            session_label = f"{icon} {str(r['session_type']).replace('_', ' ').title()}"
+            effort  = _INTENSITY_LABEL.get(str(r["intensity"]), str(r["intensity"]))
+            day_str = f"**{str(r['day_of_week'])[:3]}**  \n{_pdate.strftime('%b %d')}"
+
+            c0, c1, c2, c3, c4, c5 = st.columns([1, 2, 3, 2, 2, 8])
+            c0.write(status)
+            c1.markdown(day_str)
+            c2.markdown(f"{session_label}  \n<small>{effort}</small>", unsafe_allow_html=True)
+            c3.write(plan_d)
+            c4.write(actual_d)
+            c5.markdown(str(r["description"]))
