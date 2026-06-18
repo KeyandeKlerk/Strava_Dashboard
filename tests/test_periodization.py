@@ -21,7 +21,9 @@ def _weeks_between(start: date, end: date) -> list[date]:
 
 
 def test_monday_returns_monday():
-    assert _monday(date(2026, 6, 18)).weekday() == 0  # Wednesday → Monday
+    # 2026-06-18 is a Thursday; ceil semantics → following Monday 2026-06-22
+    assert _monday(date(2026, 6, 18)).weekday() == 0
+    assert _monday(date(2026, 6, 18)) == date(2026, 6, 22)
 
 
 def test_assign_block_types_taper_last_three_weeks():
@@ -81,16 +83,29 @@ def test_build_plan_writes_training_plan_rows(mem_conn):
 
 
 def test_build_plan_transaction_rolls_back_on_error(mem_conn):
-    # Populate plan once so there are rows to preserve
     build_plan(mem_conn, COMRADES, [])
     before = mem_conn.execute("SELECT COUNT(*) FROM training_plan").fetchone()[0]
-    # Force an error inside build_plan by passing bad race event data
+    assert before > 0
+
+    import periodization
+    original_fn = periodization.upsert_training_plan_week
+    call_count = [0]
+
+    def raise_on_second_call(*args, **kwargs):
+        call_count[0] += 1
+        if call_count[0] > 1:
+            raise RuntimeError("injected mid-transaction failure")
+        return original_fn(*args, **kwargs)
+
+    periodization.upsert_training_plan_week = raise_on_second_call
     try:
-        build_plan(mem_conn, COMRADES, [{"race_date": "not-a-date", "priority": "A", "id": 99, "distance_km": 0, "name": "bad"}])
-    except Exception:
-        pass
+        with pytest.raises(RuntimeError, match="injected"):
+            build_plan(mem_conn, COMRADES, [])
+    finally:
+        periodization.upsert_training_plan_week = original_fn
+
     after = mem_conn.execute("SELECT COUNT(*) FROM training_plan").fetchone()[0]
-    assert after == before  # original plan preserved
+    assert after == before
 
 
 def test_build_plan_writes_daily_sessions(mem_conn):

@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 from datetime import date, timedelta
-from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -150,7 +149,7 @@ def build_plan(conn, comrades_date: date, race_events: list[dict]) -> None:
             base_km = _target_km(block_type, week_num - 1, comrades_idx, current_km)
             if monday in race_windows:
                 _, _, factor = race_windows[monday]
-                weekly_km = base_km * factor if block_type not in ("race", "recovery") else base_km * factor
+                weekly_km = base_km * factor
             else:
                 weekly_km = base_km
 
