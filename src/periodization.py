@@ -283,10 +283,72 @@ def _write_daily_sessions(conn, monday: date, week_num: int, block_type: str, we
         })
 
 
-# --- Race detection & analysis (filled in Task 5) ---
+# --- Race detection & analysis ---
 def detect_and_analyse_race(conn, activity: dict) -> dict | None:
-    return None
+    if activity.get("category") != "running":
+        return None
+    if not activity.get("distance_km"):
+        return None
+
+    act_date = activity["start_date_local"][:10]  # "YYYY-MM-DD"
+    act_km = float(activity["distance_km"])
+
+    races = conn.execute("""
+        SELECT id, race_date::TEXT, distance_km
+        FROM race_events
+        WHERE strava_activity_id IS NULL
+          AND ABS(CAST(? AS DATE) - CAST(race_date AS DATE)) <= 1
+    """, [act_date]).fetchall()
+
+    candidates = [
+        (rid, abs(act_km - race_km), race_km)
+        for rid, race_date_str, race_km in races
+        if race_km > 0 and abs(act_km - race_km) / race_km <= 0.10
+    ]
+    if not candidates:
+        return None
+
+    # Tiebreak: closest distance
+    race_event_id, _, race_km = min(candidates, key=lambda x: x[1])
+
+    # Stamp activity on the race event
+    stamp_race_activity(conn, race_event_id, activity["id"])
+
+    avg_pace = (
+        activity["moving_time_min"] / act_km
+        if act_km and activity.get("moving_time_min") else None
+    )
+    race_time_h = activity["moving_time_min"] / 60.0 if activity.get("moving_time_min") else None
+
+    analysis = {
+        "race_event_id": race_event_id,
+        "activity_id": activity["id"],
+        "avg_pace_min_km": avg_pace,
+        "comrades_projection_h": 0.0,
+        "riegel_factor": 1.06,
+    }
+
+    if race_time_h:
+        proj_h = update_comrades_projection(conn, race_event_id, {
+            "activity_id": activity["id"],
+            "race_distance_km": race_km,
+            "race_time_h": race_time_h,
+        })
+        analysis["comrades_projection_h"] = proj_h
+
+    return analysis
 
 
 def update_comrades_projection(conn, race_event_id: int, race_result: dict) -> float:
-    return 0.0
+    race_h = float(race_result["race_time_h"])
+    race_km = float(race_result["race_distance_km"])
+    riegel = race_h * (RACE_DISTANCE_KM / race_km) ** 1.06 * TERRAIN_FACTOR
+
+    upsert_race_analysis(conn, {
+        "race_event_id": race_event_id,
+        "activity_id": race_result["activity_id"],
+        "avg_pace_min_km": race_result.get("avg_pace_min_km"),
+        "comrades_projection_h": round(riegel, 3),
+        "riegel_factor": 1.06,
+    })
+    return round(riegel, 3)

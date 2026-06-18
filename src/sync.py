@@ -8,6 +8,7 @@ import strava_client
 from db import get_conn, init_schema, upsert_activity, upsert_gear, get_last_synced, set_last_synced
 from category import load_category_map
 from parser import parse_activity
+from periodization import detect_and_analyse_race
 
 CATEGORY_MAP_PATH = Path(__file__).parent.parent / "category_map.yaml"
 
@@ -31,9 +32,11 @@ def run_sync(conn=None) -> None:
         seen_gear: set[str] = set(
             r[0] for r in conn.execute("SELECT id FROM gear").fetchall()
         )
+        new_activity_ids = []
         for raw in raw_activities:
             activity = parse_activity(category_map, raw)
             upsert_activity(conn, activity)
+            new_activity_ids.append(activity)
 
             gear_id = activity.get("gear_id")
             if gear_id and gear_id not in seen_gear:
@@ -41,6 +44,9 @@ def run_sync(conn=None) -> None:
                 gear_name = gear_data.get("name", gear_id) if gear_data else gear_id
                 upsert_gear(conn, gear_id, gear_name)
                 seen_gear.add(gear_id)
+
+        for activity in new_activity_ids:
+            detect_and_analyse_race(conn, activity)
 
     now_ts = int(datetime.now(timezone.utc).timestamp())
     set_last_synced(conn, now_ts)
