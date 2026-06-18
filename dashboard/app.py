@@ -317,7 +317,7 @@ with rc3:
         f"{_flag(latest_mono, 0, 1.5)} Monotony",
         f"{latest_mono:.2f}" if latest_mono is not None else "—",
     )
-    st.caption("Mean load ÷ SD. Above **2.0 = training too repetitive**, raising overuse risk. Vary hard/easy days.")
+    st.caption("Mean load ÷ SD of daily loads this week. Above **2.0 = training too repetitive** — every day feels the same, which spikes overuse risk. Alternate hard and easy days to keep this below 1.5.")
 with rc4:
     st.metric(
         f"{_flag(latest_long_pct, 0, 35)} Long Run %",
@@ -364,6 +364,15 @@ if not _tsb_df.empty:
         legend=dict(orientation="h"),
     )
     st.plotly_chart(_fig_tsb, use_container_width=True)
+    st.caption(
+        "**CTL (blue)** — Chronic Training Load: 42-day exponential average of daily load. Your long-term fitness base. "
+        "Takes 6–8 weeks to move meaningfully — don't expect overnight gains.  \n"
+        "**ATL (red)** — Acute Training Load: 7-day exponential average. Reflects current fatigue. "
+        "Spikes after hard blocks, drops fast during rest weeks.  \n"
+        "**TSB (green area)** — Training Stress Balance (Form) = CTL − ATL. "
+        "Negative = fatigued/building. Positive = fresh/peaked. "
+        "**Target TSB +5 to +15 on race day** — too positive means you detrained, too negative means you're buried."
+    )
 else:
     st.info("No training load data yet. Run sync to populate fitness history.")
 
@@ -390,6 +399,12 @@ with col_acwr:
                            annotation_text="1.5 danger", annotation_position="top right")
         fig_acwr.update_layout(height=300)
         st.plotly_chart(fig_acwr, use_container_width=True)
+        st.caption(
+            "**ACWR** (Acute:Chronic Workload Ratio) = this week's load ÷ 4-week average. "
+            "Think of it as: how hard am I training *right now* relative to what my body is used to? "
+            "Below 0.8 = undertraining / deload. 0.8–1.3 = sweet spot. Above 1.5 = injury risk spikes sharply — "
+            "the 'danger zone' in the research literature."
+        )
 
 with col_ramp:
     if not ramp_df.empty:
@@ -414,6 +429,11 @@ with col_ramp:
             height=300,
         )
         st.plotly_chart(fig_ramp, use_container_width=True)
+        st.caption(
+            "Week-on-week % change in distance. The 10% rule is a simplification — "
+            "elite programs often ramp faster during base phase and cut sharply in taper. "
+            "What matters: **don't spike two big weeks in a row** without a deload."
+        )
 
 st.divider()
 
@@ -555,6 +575,10 @@ with _tab_aerobic:
             )
             fig_z2.update_layout(height=300)
             st.plotly_chart(fig_z2, use_container_width=True)
+            st.caption(
+                "Pace (min/km) during Zone 2 efforts. A **downward trend** = getting faster at the same heart rate = "
+                "aerobic fitness improving. This is the primary long-term signal for Comrades readiness."
+            )
         else:
             st.info("No streams data yet. Run `python src/backfill.py`.")
 
@@ -573,6 +597,12 @@ with _tab_aerobic:
                                  annotation_text=">5% = poor efficiency")
             fig_decoup.update_layout(height=300, showlegend=False)
             st.plotly_chart(fig_decoup, use_container_width=True)
+            st.caption(
+                "**Aerobic decoupling** = how much your heart rate drifts relative to pace in the second half of a run. "
+                "Low (<5%) = cardiovascular system is efficient and holding pace without extra effort. "
+                "High (>5%) = fatigue or heat is forcing your heart to work harder to maintain the same speed — "
+                "your aerobic base needs more work."
+            )
 
     with col_c:
         if not cad_df.empty:
@@ -590,6 +620,11 @@ with _tab_aerobic:
                               annotation_text="180 optimal")
             fig_cad.update_layout(height=300)
             st.plotly_chart(fig_cad, use_container_width=True)
+            st.caption(
+                "Steps per minute. Higher cadence = shorter ground contact time = less braking force = lower injury risk. "
+                "170–180 spm is the evidence-based range. On Comrades' long descents, "
+                "cadence control is critical to protect your quads."
+            )
         else:
             st.info("No cadence data yet. Run `python src/backfill.py`.")
 
@@ -615,7 +650,13 @@ with _tab_quality:
         )
         _fig_lrq.update_layout(height=380)
         st.plotly_chart(_fig_lrq, use_container_width=True)
-        st.caption("Score 0–100: Z2 compliance (50%) + aerobic decoupling (50%). Larger dot = longer run.")
+        st.caption(
+            "**Quality Score (0–100):** composite of two signals — "
+            "**Z2 compliance** (50% weight): % of run time in Z1+Z2 heart rate; maps 60–100% → 0–100 pts. "
+            "**Aerobic decoupling** (50% weight): HR drift inverted; maps 0–5% drift → 100–0 pts. "
+            "A score above 70 means you ran long, stayed aerobic, and your cardiovascular system held up. "
+            "Larger dot = longer run. The trendline shows whether long run quality is improving over time."
+        )
     else:
         st.info("No long runs ≥20 km with stream data yet. Run `python src/backfill.py` to populate.")
 
@@ -731,7 +772,14 @@ with _tab_splits:
                 "km": st.column_config.NumberColumn("km", format="%.0f"),
             },
         )
-        st.caption("Times based on most recent Riegel projection. Assumes even effort with grade adjustments.")
+        st.caption(
+            "Splits derived from your latest Riegel-formula projection: "
+            "**T_comrades = T_race × (90 / race_km)^1.06 × 1.04** "
+            "(the 1.04 factor accounts for Comrades Down Run terrain and late-race heat). "
+            "Grade adjustments shift time between sections based on elevation change — "
+            "more time budgeted for climbs (Cato Ridge, Botha's Hill), less for descents into Durban. "
+            "Use these as *rough targets*, not splits to chase — Comrades conditions vary widely."
+        )
 
         # Reference elevation profile
         _ELEV_PROFILE = [
