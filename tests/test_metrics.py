@@ -275,3 +275,90 @@ def test_monthly_volume_groups_by_month(mem_conn):
     assert len(df) == 2
     march = df[df["month_start"].astype(str).str.startswith("2026-03")]
     assert float(march.iloc[0]["run_distance_km"]) == pytest.approx(35.0)
+
+
+def test_ctl_atl_tsb_history_columns(mem_conn):
+    _insert_run(mem_conn, 901, "2026-01-05T07:00:00", 10.0, load_score=80.0)
+    df = metrics.ctl_atl_tsb_history(mem_conn)
+    assert isinstance(df, pd.DataFrame)
+    for col in ("day", "load", "ctl", "atl", "tsb"):
+        assert col in df.columns, f"Missing column: {col}"
+
+
+def test_ctl_increases_with_consistent_load(mem_conn):
+    for i in range(50):
+        from datetime import date, timedelta
+        d = (date(2026, 1, 1) + timedelta(days=i)).isoformat()
+        _insert_run(mem_conn, 800 + i, f"{d}T07:00:00", 10.0, load_score=100.0)
+    df = metrics.ctl_atl_tsb_history(mem_conn).sort_values("day")
+    # CTL should be higher at the end than at the beginning
+    assert float(df["ctl"].iloc[-1]) > float(df["ctl"].iloc[0])
+
+
+def test_long_run_quality_scores_only_runs_over_20km(mem_conn):
+    from db import upsert_streams_derived
+    _insert_run(mem_conn, 701, "2026-02-01T07:00:00", 25.0, load_score=150.0)
+    _insert_run(mem_conn, 702, "2026-02-08T07:00:00", 10.0, load_score=60.0)
+    for aid in (701, 702):
+        upsert_streams_derived(mem_conn, {
+            "activity_id": aid, "elevation_loss_m": 50.0, "decoupling_pct": 2.0,
+            "pct_time_z1": 20.0, "pct_time_z2": 55.0, "pct_time_z3": 20.0,
+            "pct_time_z4": 4.0, "pct_time_z5": 1.0,
+            "grade_adjusted_pace": 6.0, "cadence_avg": 172.0,
+        })
+    df = metrics.long_run_quality_scores(mem_conn)
+    assert len(df) == 1
+    assert float(df.iloc[0]["distance_km"]) == pytest.approx(25.0)
+
+
+def test_long_run_quality_score_range(mem_conn):
+    from db import upsert_streams_derived
+    _insert_run(mem_conn, 703, "2026-02-15T07:00:00", 30.0, load_score=200.0)
+    upsert_streams_derived(mem_conn, {
+        "activity_id": 703, "elevation_loss_m": 100.0, "decoupling_pct": 1.5,
+        "pct_time_z1": 25.0, "pct_time_z2": 60.0, "pct_time_z3": 12.0,
+        "pct_time_z4": 2.0, "pct_time_z5": 1.0,
+        "grade_adjusted_pace": 5.8, "cadence_avg": 174.0,
+    })
+    df = metrics.long_run_quality_scores(mem_conn)
+    score = float(df.iloc[0]["quality_score"])
+    assert 0 <= score <= 100
+
+
+def test_shoe_mileage_sums_running_km(mem_conn):
+    from db import upsert_gear
+    upsert_gear(mem_conn, "gABC", "Test Shoe")
+    _insert_run(mem_conn, 601, "2026-03-01T07:00:00", 15.0, load_score=90.0)
+    _insert_run(mem_conn, 602, "2026-03-08T07:00:00", 20.0, load_score=120.0)
+    mem_conn.execute("UPDATE activities SET gear_id = 'gABC' WHERE id IN (601, 602)")
+    df = metrics.shoe_mileage(mem_conn)
+    row = df[df["id"] == "gABC"].iloc[0]
+    assert float(row["total_km"]) == pytest.approx(35.0)
+    assert float(row["km_remaining"]) == pytest.approx(765.0)
+
+
+def test_comrades_projected_splits_returns_checkpoints(mem_conn):
+    from db import upsert_race_event, upsert_race_analysis, upsert_activity
+    activity = {
+        "id": 88888, "name": "Race", "sport_type": "Run", "category": "running",
+        "start_date_local": "2026-04-19T06:00:00", "distance_km": 56.0,
+        "moving_time_min": 330.0, "elapsed_time_min": 335.0, "elevation_gain_m": 800.0,
+        "average_heartrate": 150.0, "max_heartrate": 170.0, "average_cadence": 168.0,
+        "average_speed_kmh": 10.2, "relative_effort": 250.0, "load_score": 250.0,
+        "gear_id": None, "gear_name": None,
+    }
+    upsert_activity(mem_conn, activity)
+    rid = upsert_race_event(mem_conn, {
+        "name": "Two Oceans", "race_date": "2026-04-19",
+        "distance_km": 56.0, "priority": "A",
+    })
+    upsert_race_analysis(mem_conn, {
+        "race_event_id": rid, "activity_id": 88888,
+        "comrades_projection_h": 9.5, "riegel_factor": 1.06,
+    })
+    df = metrics.comrades_projected_splits(mem_conn)
+    assert not df.empty
+    assert "checkpoint" in df.columns
+    assert "cumulative_time" in df.columns
+    # Last checkpoint should be Durban
+    assert df.iloc[-1]["checkpoint"] == "Durban"
