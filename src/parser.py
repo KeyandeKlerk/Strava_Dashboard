@@ -37,4 +37,5 @@ def parse_activity(category_map: dict, raw: dict) -> dict:
         "average_speed_kmh": speed_kmh,
         "relative_effort": relative_effort,
         "load_score": round(load_score, 2),
+        "gear_id": raw.get("gear_id"),
     }

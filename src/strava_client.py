@@ -75,3 +75,11 @@ def get_activity_streams(access_token: str, activity_id: int) -> dict:
     )
     resp.raise_for_status()
     return resp.json()
+
+
+def get_gear(access_token: str, gear_id: str) -> dict | None:
+    headers = {"Authorization": f"Bearer {access_token}"}
+    resp = requests.get(f"{API_BASE}/gear/{gear_id}", headers=headers)
+    if resp.status_code == 200:
+        return resp.json()
+    return None

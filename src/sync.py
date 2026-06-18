@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, str(Path(__file__).parent))
 
 import strava_client
-from db import get_conn, init_schema, upsert_activity, get_last_synced, set_last_synced
+from db import get_conn, init_schema, upsert_activity, upsert_gear, get_last_synced, set_last_synced
 from category import load_category_map
 from parser import parse_activity
 
@@ -28,9 +28,19 @@ def run_sync(conn=None) -> None:
         print("No new activities.")
     else:
         print(f"Syncing {len(raw_activities)} activities...")
+        seen_gear: set[str] = set(
+            r[0] for r in conn.execute("SELECT id FROM gear").fetchall()
+        )
         for raw in raw_activities:
             activity = parse_activity(category_map, raw)
             upsert_activity(conn, activity)
+
+            gear_id = activity.get("gear_id")
+            if gear_id and gear_id not in seen_gear:
+                gear_data = strava_client.get_gear(access_token, gear_id)
+                gear_name = gear_data.get("name", gear_id) if gear_data else gear_id
+                upsert_gear(conn, gear_id, gear_name)
+                seen_gear.add(gear_id)
 
     now_ts = int(datetime.now(timezone.utc).timestamp())
     set_last_synced(conn, now_ts)

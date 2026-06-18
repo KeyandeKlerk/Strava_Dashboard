@@ -142,8 +142,8 @@ def upsert_activity(conn: duckdb.DuckDBPyConnection, activity: dict) -> None:
             id, name, sport_type, category, start_date_local,
             distance_km, moving_time_min, elapsed_time_min, elevation_gain_m,
             average_heartrate, max_heartrate, average_cadence, average_speed_kmh,
-            relative_effort, load_score, synced_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
+            relative_effort, load_score, gear_id, gear_name, synced_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
         ON CONFLICT (id) DO UPDATE SET
             name = excluded.name,
             sport_type = excluded.sport_type,
@@ -159,6 +159,8 @@ def upsert_activity(conn: duckdb.DuckDBPyConnection, activity: dict) -> None:
             average_speed_kmh = excluded.average_speed_kmh,
             relative_effort = excluded.relative_effort,
             load_score = excluded.load_score,
+            gear_id = excluded.gear_id,
+            gear_name = excluded.gear_name,
             synced_at = now()
     """, [
         activity["id"], activity.get("name"), activity.get("sport_type"),
@@ -168,6 +170,7 @@ def upsert_activity(conn: duckdb.DuckDBPyConnection, activity: dict) -> None:
         activity.get("average_heartrate"), activity.get("max_heartrate"),
         activity.get("average_cadence"), activity.get("average_speed_kmh"),
         activity.get("relative_effort"), activity.get("load_score"),
+        activity.get("gear_id"), activity.get("gear_name"),
     ])
 
 
