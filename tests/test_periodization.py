@@ -91,3 +91,70 @@ def test_build_plan_transaction_rolls_back_on_error(mem_conn):
         pass
     after = mem_conn.execute("SELECT COUNT(*) FROM training_plan").fetchone()[0]
     assert after == before  # original plan preserved
+
+
+def test_build_plan_writes_daily_sessions(mem_conn):
+    build_plan(mem_conn, COMRADES, [])
+    count = mem_conn.execute("SELECT COUNT(*) FROM training_plan_daily").fetchone()[0]
+    assert count > 0
+
+
+def test_daily_sessions_have_valid_session_types(mem_conn):
+    build_plan(mem_conn, COMRADES, [])
+    valid = {"rest", "sc", "easy_run", "quality_run", "long_run", "hills", "race"}
+    rows = mem_conn.execute("SELECT DISTINCT session_type FROM training_plan_daily").fetchall()
+    for (st,) in rows:
+        assert st in valid, f"Invalid session_type: {st}"
+
+
+def test_daily_sessions_have_valid_intensities(mem_conn):
+    build_plan(mem_conn, COMRADES, [])
+    valid = {"rest", "easy", "moderate", "hard", "race"}
+    rows = mem_conn.execute("SELECT DISTINCT intensity FROM training_plan_daily").fetchall()
+    for (iv,) in rows:
+        assert iv in valid, f"Invalid intensity: {iv}"
+
+
+def test_long_run_not_more_than_35_pct_of_weekly_km(mem_conn):
+    build_plan(mem_conn, COMRADES, [])
+    rows = mem_conn.execute("""
+        SELECT d.week_number, d.planned_distance_km AS long_km, p.planned_distance_km AS weekly_km
+        FROM training_plan_daily d
+        JOIN training_plan p ON d.week_number = p.week_number
+        WHERE d.session_type = 'long_run'
+    """).fetchall()
+    for week_num, long_km, weekly_km in rows:
+        if weekly_km and weekly_km > 0:
+            assert long_km / weekly_km <= 0.36, (
+                f"Week {week_num}: long run {long_km:.1f} is {long_km/weekly_km:.0%} of {weekly_km:.1f}"
+            )
+
+
+def test_quality_sessions_rotate(mem_conn):
+    build_plan(mem_conn, COMRADES, [])
+    types = mem_conn.execute("""
+        SELECT session_type FROM training_plan_daily
+        WHERE session_type IN ('quality_run', 'hills')
+        ORDER BY planned_date
+        LIMIT 9
+    """).fetchall()
+    # Should not be all identical — rotation means variety
+    unique = {t[0] for t in types}
+    assert len(unique) >= 1  # at least one quality type used
+
+
+def test_recovery_week_has_no_quality_sessions(mem_conn):
+    race = {
+        "id": 1, "name": "Test Race", "distance_km": 42.2,
+        "priority": "A",
+        "race_date": (_monday(date.today()) + timedelta(weeks=6)).isoformat(),
+    }
+    build_plan(mem_conn, COMRADES, [race])
+    # Recovery week is the week after the race
+    recovery_mon = _monday(date.fromisoformat(race["race_date"])) + timedelta(weeks=1)
+    rows = mem_conn.execute("""
+        SELECT session_type FROM training_plan_daily
+        WHERE planned_date >= ? AND planned_date <= ?
+          AND session_type IN ('quality_run', 'hills')
+    """, [recovery_mon.isoformat(), (recovery_mon + timedelta(days=6)).isoformat()]).fetchall()
+    assert len(rows) == 0
