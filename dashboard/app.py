@@ -364,6 +364,8 @@ if not _tsb_df.empty:
         legend=dict(orientation="h"),
     )
     st.plotly_chart(_fig_tsb, use_container_width=True)
+else:
+    st.info("No training load data yet. Run sync to populate fitness history.")
 
 # ACWR and ramp rate side by side (retained)
 col_acwr, col_ramp = st.columns(2)
@@ -909,7 +911,7 @@ else:
     daily = metrics.daily_plan_for_week(conn, selected_week_num)
 
     if daily.empty:
-        st.info("No daily sessions yet — run `python src/generate_daily_plan.py`.")
+        st.info("No daily sessions yet — run `build_plan` from the Race Calendar section above.")
     else:
         # Header row
         h0, h1, h2, h3, h4, h5 = st.columns([1, 2, 3, 2, 2, 8])
