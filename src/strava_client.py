@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Optional
 import requests
 from dotenv import load_dotenv
+from db import get_conn, init_schema, get_refresh_token, set_refresh_token
 
 load_dotenv()
 
@@ -11,17 +12,24 @@ API_BASE = "https://www.strava.com/api/v3"
 
 
 def refresh_access_token() -> str:
+    conn = get_conn()
+    init_schema(conn)
+    stored = get_refresh_token(conn)
+    conn.close()
+
+    current_refresh = stored or os.environ["STRAVA_REFRESH_TOKEN"]
+
     resp = requests.post(TOKEN_URL, data={
         "client_id": os.environ["STRAVA_CLIENT_ID"],
         "client_secret": os.environ["STRAVA_CLIENT_SECRET"],
-        "refresh_token": os.environ["STRAVA_REFRESH_TOKEN"],
+        "refresh_token": current_refresh,
         "grant_type": "refresh_token",
     })
     resp.raise_for_status()
     data = resp.json()
 
     new_refresh = data.get("refresh_token", "")
-    if new_refresh and new_refresh != os.environ.get("STRAVA_REFRESH_TOKEN"):
+    if new_refresh and new_refresh != current_refresh:
         _persist_refresh_token(new_refresh)
         os.environ["STRAVA_REFRESH_TOKEN"] = new_refresh
 
@@ -29,15 +37,10 @@ def refresh_access_token() -> str:
 
 
 def _persist_refresh_token(token: str) -> None:
-    env_path = Path(".env")
-    if not env_path.exists():
-        return
-    lines = env_path.read_text().splitlines()
-    updated = [
-        f"STRAVA_REFRESH_TOKEN={token}" if l.startswith("STRAVA_REFRESH_TOKEN=") else l
-        for l in lines
-    ]
-    env_path.write_text("\n".join(updated) + "\n")
+    conn = get_conn()
+    init_schema(conn)
+    set_refresh_token(conn, token)
+    conn.close()
 
 
 def get_activities(
