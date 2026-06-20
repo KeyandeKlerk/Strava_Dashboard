@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from db import init_schema, upsert_activity, upsert_streams_derived, get_last_synced, set_last_synced
+from db import init_schema, upsert_activity, upsert_streams_derived, get_last_synced, set_last_synced, get_refresh_token, set_refresh_token
 
 
 SAMPLE_ACTIVITY = {
@@ -245,3 +245,18 @@ def test_correlate_activities_to_plan(mem_conn):
     ).fetchone()
     assert gym_row[0] is True
     assert gym_row[1] == 5002
+
+
+def test_get_refresh_token_returns_none_when_unset(mem_conn):
+    assert get_refresh_token(mem_conn) is None
+
+
+def test_set_and_get_refresh_token(mem_conn):
+    set_refresh_token(mem_conn, "my_refresh_token")
+    assert get_refresh_token(mem_conn) == "my_refresh_token"
+
+
+def test_set_refresh_token_overwrites_existing(mem_conn):
+    set_refresh_token(mem_conn, "old_token")
+    set_refresh_token(mem_conn, "new_token")
+    assert get_refresh_token(mem_conn) == "new_token"

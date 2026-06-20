@@ -352,3 +352,17 @@ def get_all_race_events(conn: duckdb.DuckDBPyConnection) -> list[dict]:
     cols = ["id", "name", "race_date", "distance_km", "priority",
             "target_finish_h", "notes", "strava_activity_id"]
     return [dict(zip(cols, r)) for r in rows]
+
+
+def get_refresh_token(conn: duckdb.DuckDBPyConnection) -> Optional[str]:
+    result = conn.execute(
+        "SELECT value FROM sync_state WHERE key = 'strava_refresh_token'"
+    ).fetchone()
+    return result[0] if result else None
+
+
+def set_refresh_token(conn: duckdb.DuckDBPyConnection, token: str) -> None:
+    conn.execute("""
+        INSERT INTO sync_state (key, value) VALUES ('strava_refresh_token', ?)
+        ON CONFLICT (key) DO UPDATE SET value = excluded.value
+    """, [token])
