@@ -6,3 +6,10 @@ __pycache__/
 .DS_Store
 .venv/
 .superpowers/
+.pytest_cache/
+.coverage
+htmlcov/
+.vscode/
+.idea/
+*.log
+.streamlit/

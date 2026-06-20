@@ -14,6 +14,7 @@ CATEGORY_MAP_PATH = Path(__file__).parent.parent / "category_map.yaml"
 
 
 def run_sync(conn=None) -> None:
+    _owns_conn = conn is None
     if conn is None:
         conn = get_conn()
         init_schema(conn)
@@ -52,6 +53,8 @@ def run_sync(conn=None) -> None:
     set_last_synced(conn, now_ts)
     correlate_activities_to_plan(conn)
     print(f"Sync complete. {len(raw_activities) if raw_activities else 0} activities processed.")
+    if _owns_conn:
+        conn.close()
 
 
 if __name__ == "__main__":
