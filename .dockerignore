@@ -1,8 +1,10 @@
 .env
 data/
-__pycache__/
-*.py[cod]
+.git
+__pycache__
+*.pyc
 *.duckdb
 .DS_Store
+docs/
+tests/
 .venv/
-.superpowers/
