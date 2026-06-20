@@ -1,0 +1,36 @@
+app = "strava-dashboard"
+primary_region = "jnb"
+
+[build]
+
+[[mounts]]
+  source = "training_data"
+  destination = "/app/data"
+
+[[services]]
+  internal_port = 8501
+  protocol = "tcp"
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+    force_https = true
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 25
+    soft_limit = 20
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 8080
