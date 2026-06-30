@@ -16,6 +16,17 @@ import metrics
 RACE_DATE = date(2027, 6, 13)
 RACE_DISTANCE_KM = 90.0
 
+# Comrades men's medal bands — (name, display_label, cutoff_hours).
+# Gold (top 10 finishers) is position-based and omitted from time projections.
+BANDS = [
+    ("Wally Hayward",  "Sub 6:00",       6.0),
+    ("Silver",         "6:00 – 7:29",    7.5),
+    ("Bill Rowan",     "7:30 – 8:59",    9.0),
+    ("Robert Mtshali", "9:00 – 9:59",   10.0),
+    ("Bronze",         "10:00 – 10:59", 11.0),
+    ("Vic Clapham",    "11:00 – 11:59", 12.0),
+]
+
 st.set_page_config(
     page_title="Comrades 2027 Training",
     layout="wide",
@@ -726,14 +737,6 @@ with _tab_milestones:
     with band_col:
         proj_h = ms.get("projected_finish_h")
         st.markdown("**Comrades Finish Time Bands**")
-        BANDS = [
-            ("Wally Hayward", "Sub 6:00",           6.0),
-            ("Gold",          "Sub 7:30",            7.5),
-            ("Silver",        "Sub 9:00",            9.0),
-            ("Bill Rowan",    "Sub 10:00",           10.0),
-            ("Robert Mtshali","Sub 11:00",           11.0),
-            ("Bronze",        "Sub 12:00 (cutoff)",  12.0),
-        ]
         prev_h = 0.0
         for medal, label, cutoff_h in BANDS:
             on_track = proj_h is not None and prev_h <= proj_h < cutoff_h
