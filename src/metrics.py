@@ -491,7 +491,7 @@ def weekly_completion_summary(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     """).df()
 
 
-def ctl_atl_tsb_history(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+def ctl_atl_tsb_history(conn: duckdb.DuckDBPyConnection, since: Optional[str] = None, until: Optional[str] = None) -> pd.DataFrame:
     daily = conn.execute("""
         WITH date_spine AS (
             SELECT UNNEST(generate_series(
@@ -522,7 +522,12 @@ def ctl_atl_tsb_history(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
         rows.append({"day": row["day"], "load": row["load"],
                      "ctl": round(ctl, 2), "atl": round(atl, 2), "tsb": round(tsb, 2)})
 
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    if since:
+        df = df[df["day"].astype(str) >= since]
+    if until:
+        df = df[df["day"].astype(str) <= until]
+    return df
 
 
 def long_run_quality_scores(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:

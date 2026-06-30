@@ -362,3 +362,18 @@ def test_comrades_projected_splits_returns_checkpoints(mem_conn):
     assert "cumulative_time" in df.columns
     # Last checkpoint should be Durban
     assert df.iloc[-1]["checkpoint"] == "Durban"
+
+
+def test_ctl_atl_tsb_history_filters_output_by_since_until(mem_conn):
+    _insert_run(mem_conn, 1, "2026-01-15", 10.0)
+    _insert_run(mem_conn, 2, "2026-02-15", 12.0)
+    _insert_run(mem_conn, 3, "2026-03-15", 14.0)
+
+    full = metrics.ctl_atl_tsb_history(mem_conn)
+    assert not full.empty
+
+    filtered = metrics.ctl_atl_tsb_history(mem_conn, since="2026-02-01", until="2026-02-28")
+    assert not filtered.empty
+    assert (filtered["day"].astype(str) >= "2026-02-01").all()
+    assert (filtered["day"].astype(str) <= "2026-02-28").all()
+    assert len(filtered) < len(full)
