@@ -48,20 +48,17 @@ with _title_col:
 
 with _filter_col:
     st.markdown("<div style='padding-top:18px'></div>", unsafe_allow_html=True)
-    _range = st.date_input(
-        "Filter charts by date range",
-        value=(_FILTER_MIN, date.today()),
+    _since = st.date_input(
+        "Show from",
+        value=_FILTER_MIN,
         min_value=_FILTER_MIN,
-        max_value=RACE_DATE,
+        max_value=date.today(),
         format="YYYY-MM-DD",
     )
 
-if isinstance(_range, (list, tuple)) and len(_range) == 2:
-    _since, _until = _range
-elif isinstance(_range, (list, tuple)) and len(_range) == 1:
-    _since, _until = _range[0], date.today()
-else:
-    _since, _until = (_range if isinstance(_range, date) else _FILTER_MIN), date.today()
+if not isinstance(_since, date):
+    _since = _FILTER_MIN
+_until = date.today()
 
 metrics.TRAINING_START = _since.isoformat()
 metrics.TRAINING_END   = _until.isoformat()
