@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from db import get_conn, init_schema, upsert_race_event, get_all_race_events
 from periodization import build_plan
 import metrics
+from highlights import build_highlights
 
 RACE_DATE = date(2027, 6, 13)
 RACE_DISTANCE_KM = 90.0
@@ -63,6 +64,14 @@ _until = date.today()
 metrics.TRAINING_START = _since.isoformat()
 metrics.TRAINING_END   = _until.isoformat()
 
+# ── Pre-fetch for highlights panel (DataFrames reused in sections below) ──────
+_tsb_df  = metrics.ctl_atl_tsb_history(conn, since=metrics.TRAINING_START, until=metrics.TRAINING_END)
+_acwr_df = metrics.acwr_history(conn)
+_ramp_df = metrics.weekly_ramp_rate(conn)
+_ms      = metrics.comrades_milestones(conn, race_distance_km=RACE_DISTANCE_KM)
+_lrq_df  = metrics.long_run_quality_scores(conn)
+_shoe_df = metrics.shoe_mileage(conn)
+
 c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Days to Race", days_to_race)
 c2.metric("This Week (km)", f"{cur['run_distance_km']:.1f}")
@@ -74,6 +83,42 @@ c4.metric(
 c5.metric("Phase", cur["phase"])
 
 st.divider()
+
+# ── Highlights ────────────────────────────────────────────────────────────────
+_latest_tsb  = float(_tsb_df["tsb"].iloc[-1]) if not _tsb_df.empty else None
+_latest_ramp = (
+    float(_ramp_df["ramp_pct"].dropna().iloc[0])
+    if not _ramp_df.empty and _ramp_df["ramp_pct"].notna().any()
+    else None
+)
+
+# Current week session completion from the training plan
+_week_summary_hl = metrics.weekly_completion_summary(conn)
+_week_completion_pct: float | None = None
+if not _week_summary_hl.empty:
+    _today_hl = date.today()
+    for _, _wrow in _week_summary_hl.iterrows():
+        _ws = _wrow["week_start_date"]
+        _ws_date = _ws.date() if hasattr(_ws, "date") else _ws
+        if _ws_date <= _today_hl < _ws_date + __import__("datetime").timedelta(days=7):
+            _week_completion_pct = float(_wrow["completion_pct"] or 0)
+            break
+
+_hl_text, _hl_style = build_highlights(
+    ramp_pct=_latest_ramp,
+    tsb=_latest_tsb,
+    projected_h=_ms.get("projected_finish_h"),
+    days_to_race=days_to_race,
+    lr_quality_df=_lrq_df,
+    shoe_df=_shoe_df,
+    week_completion_pct=_week_completion_pct,
+)
+if _hl_style == "success":
+    st.success(_hl_text)
+elif _hl_style == "warning":
+    st.warning(_hl_text)
+else:
+    st.info(_hl_text)
 
 # ── Race Calendar ─────────────────────────────────────────────────────────────
 st.subheader("Race Calendar")
@@ -286,8 +331,6 @@ st.divider()
 # ── Load & Risk Panel ─────────────────────────────────────────────────────────
 st.subheader("Load & Risk Indicators")
 
-acwr_df = metrics.acwr_history(conn)
-ramp_df = metrics.weekly_ramp_rate(conn)
 mono_df = metrics.weekly_monotony(conn)
 long_pct_df = metrics.long_run_pct(conn)
 
@@ -302,8 +345,8 @@ def _flag(value, low, high):
     return "🟡"
 
 
-latest_acwr = acwr_df["acwr"].dropna().iloc[0] if not acwr_df.empty and acwr_df["acwr"].notna().any() else None
-latest_ramp = ramp_df["ramp_pct"].dropna().iloc[0] if not ramp_df.empty and ramp_df["ramp_pct"].notna().any() else None
+latest_acwr = _acwr_df["acwr"].dropna().iloc[0] if not _acwr_df.empty and _acwr_df["acwr"].notna().any() else None
+latest_ramp = _ramp_df["ramp_pct"].dropna().iloc[0] if not _ramp_df.empty and _ramp_df["ramp_pct"].notna().any() else None
 latest_mono = mono_df["monotony"].dropna().iloc[0] if not mono_df.empty and mono_df["monotony"].notna().any() else None
 latest_long_pct = long_pct_df["long_run_pct"].dropna().iloc[0] if not long_pct_df.empty and long_pct_df["long_run_pct"].notna().any() else None
 
@@ -334,7 +377,6 @@ with rc4:
     st.caption("Longest run as % of weekly volume. Above **35% risks ITB** — spread load across more sessions.")
 
 # CTL/ATL/TSB chart (full width)
-_tsb_df = metrics.ctl_atl_tsb_history(conn)
 if not _tsb_df.empty:
     _tsb_df = _tsb_df.sort_values("day")
     _fig_tsb = go.Figure()
@@ -388,9 +430,9 @@ else:
 col_acwr, col_ramp = st.columns(2)
 
 with col_acwr:
-    if not acwr_df.empty:
+    if not _acwr_df.empty:
         fig_acwr = px.line(
-            acwr_df.sort_values("day"),
+            _acwr_df.sort_values("day"),
             x="day", y="acwr",
             title="ACWR History",
             labels={"acwr": "ACWR", "day": "Date"},
@@ -415,8 +457,8 @@ with col_acwr:
         )
 
 with col_ramp:
-    if not ramp_df.empty:
-        ramp_sorted = ramp_df.dropna(subset=["ramp_pct"]).sort_values("week_start").tail(16)
+    if not _ramp_df.empty:
+        ramp_sorted = _ramp_df.dropna(subset=["ramp_pct"]).sort_values("week_start").tail(16)
         bar_colors = [
             "#e74c3c" if abs(r) > 15 else ("#f39c12" if abs(r) > 10 else "#2ecc71")
             for r in ramp_sorted["ramp_pct"]
@@ -447,8 +489,6 @@ st.divider()
 
 # ── Shoe Mileage ──────────────────────────────────────────────────────────────
 st.subheader("Shoe Mileage")
-
-_shoe_df = metrics.shoe_mileage(conn)
 
 if _shoe_df.empty:
     _any_gear = conn.execute("SELECT COUNT(*) FROM activities WHERE gear_id IS NOT NULL").fetchone()[0]
@@ -637,7 +677,6 @@ with _tab_aerobic:
             st.info("No cadence data yet. Run `python src/backfill.py`.")
 
 with _tab_quality:
-    _lrq_df = metrics.long_run_quality_scores(conn)
     if not _lrq_df.empty:
         _fig_lrq = px.scatter(
             _lrq_df,
@@ -673,40 +712,39 @@ st.divider()
 # ── Comrades Milestones ───────────────────────────────────────────────────────
 st.subheader("Comrades 2027 Milestones")
 
-ms = metrics.comrades_milestones(conn, race_distance_km=RACE_DISTANCE_KM)
 b2b_df = metrics.back_to_back_runs(conn)
 
 m1, m2, m3, m4, m5, m6 = st.columns(6)
 m1.metric(
     "Longest Run",
-    f"{ms['longest_run_km']:.1f} km",
-    f"{ms['longest_run_pct_race']:.0f}% of race",
+    f"{_ms['longest_run_km']:.1f} km",
+    f"{_ms['longest_run_pct_race']:.0f}% of race",
 )
 m2.metric(
     "Total Elev Gain",
-    f"{ms['total_gain_m']:,.0f} m",
+    f"{_ms['total_gain_m']:,.0f} m",
     help="Cumulative elevation gain across all runs",
 )
 m3.metric(
     "Descent Practiced",
-    f"{ms['total_descent_m']:.0f} m",
-    f"{ms['descent_pct_practiced']:.0f}% of {ms['race_descent_m']:.0f}m target",
+    f"{_ms['total_descent_m']:.0f} m",
+    f"{_ms['descent_pct_practiced']:.0f}% of {_ms['race_descent_m']:.0f}m target",
     help="Cumulative elevation loss from GPS streams. Comrades Down Run is ~1800m net descent.",
 )
 m4.metric(
     "Runs ≥30 km",
-    str(ms["runs_30plus"]),
-    f"{ms['runs_20plus']} runs ≥20 km",
+    str(_ms["runs_30plus"]),
+    f"{_ms['runs_20plus']} runs ≥20 km",
 )
 m5.metric(
     "Best Back-to-Back",
-    f"{ms['max_b2b_km']:.1f} km" if ms["max_b2b_km"] else "—",
+    f"{_ms['max_b2b_km']:.1f} km" if _ms["max_b2b_km"] else "—",
     help="Combined distance of two consecutive long run days",
 )
 m6.metric(
     "Projected Finish",
-    f"{ms['projected_finish_h']:.2f} h" if ms["projected_finish_h"] else "—",
-    f"vs {ms['cutoff_h']:.0f}h cutoff",
+    f"{_ms['projected_finish_h']:.2f} h" if _ms["projected_finish_h"] else "—",
+    f"vs {_ms['cutoff_h']:.0f}h cutoff",
     delta_color="inverse",
 )
 
@@ -732,7 +770,7 @@ with _tab_milestones:
             st.plotly_chart(fig_elev, use_container_width=True)
 
     with band_col:
-        proj_h = ms.get("projected_finish_h")
+        proj_h = _ms.get("projected_finish_h")
         st.markdown("**Comrades Finish Time Bands**")
         prev_h = 0.0
         for medal, label, cutoff_h in BANDS:
