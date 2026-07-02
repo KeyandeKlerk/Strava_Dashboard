@@ -213,22 +213,6 @@ def weekly_zone_time(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     """).df()
 
 
-def cadence_trend(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
-    return conn.execute(f"""
-        SELECT
-            a.start_date_local::DATE AS activity_date,
-            a.name,
-            ROUND(a.distance_km, 1) AS distance_km,
-            sd.cadence_avg
-        FROM activities a
-        JOIN activity_streams_derived sd ON a.id = sd.activity_id
-        WHERE a.category = 'running'
-          AND sd.cadence_avg IS NOT NULL
-          AND {_date_filter('a')}
-        ORDER BY a.start_date_local
-    """).df()
-
-
 def long_run_history(conn: duckdb.DuckDBPyConnection, min_km: float = 20.0) -> pd.DataFrame:
     return conn.execute(f"""
         SELECT

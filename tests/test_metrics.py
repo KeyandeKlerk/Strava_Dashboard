@@ -252,13 +252,6 @@ def test_weekly_zone_time_aggregates_by_week(mem_conn):
     assert float(df.iloc[0]["z2_min"]) == pytest.approx(51.4, abs=1.0)
 
 
-def test_cadence_trend_returns_runs_with_cadence(mem_conn):
-    _insert_run_with_streams(mem_conn, 1, "2026-03-11T07:00:00", 10.0, 145.0, 10.5)
-    df = metrics.cadence_trend(mem_conn)
-    assert not df.empty
-    assert float(df.iloc[0]["cadence_avg"]) == pytest.approx(172.5)
-
-
 def test_long_run_history_filters_by_distance(mem_conn):
     _insert_run(mem_conn, 1, "2026-03-11T07:00:00", 25.0)
     _insert_run(mem_conn, 2, "2026-03-12T07:00:00", 10.0)
