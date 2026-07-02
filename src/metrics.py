@@ -335,11 +335,6 @@ def run_pace_trend(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     """).df()
 
 
-def zone2_pace_trend(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
-    """Kept for backwards compatibility — use run_pace_trend instead."""
-    return run_pace_trend(conn)
-
-
 def back_to_back_runs(conn: duckdb.DuckDBPyConnection, min_km: float = 15.0) -> pd.DataFrame:
     return conn.execute(f"""
         WITH runs AS (

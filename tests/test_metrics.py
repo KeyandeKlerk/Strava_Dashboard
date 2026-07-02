@@ -198,13 +198,13 @@ def _insert_run_with_streams(conn, activity_id, date_str, distance_km, avg_hr, a
     })
 
 
-def test_zone2_pace_trend_includes_mostly_z2_runs(mem_conn):
+def test_run_pace_trend_includes_all_runs(mem_conn):
     _insert_run_with_streams(mem_conn, 1, "2026-03-11T07:00:00", 15.0, 145.0, 10.5, pct_z2=60.0)
     _insert_run_with_streams(mem_conn, 2, "2026-03-18T07:00:00", 16.0, 143.0, 10.8, pct_z2=65.0)
-    # Run with no streams data — excluded by INNER JOIN regardless of distance
+    # Run with no streams data — included via LEFT JOIN regardless of Z2 %
     _insert_run(mem_conn, 3, "2026-03-20T07:00:00", 8.0)
-    df = metrics.zone2_pace_trend(mem_conn)
-    assert len(df) == 2
+    df = metrics.run_pace_trend(mem_conn)
+    assert len(df) == 3
 
 
 def test_back_to_back_runs_finds_consecutive(mem_conn):
