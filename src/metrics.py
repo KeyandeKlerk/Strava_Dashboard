@@ -311,7 +311,7 @@ def current_week_stats(conn: duckdb.DuckDBPyConnection) -> dict:
     }
 
 
-def zone2_pace_trend(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+def run_pace_trend(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     return conn.execute(f"""
         SELECT
             a.start_date_local::DATE AS activity_date,
@@ -327,13 +327,17 @@ def zone2_pace_trend(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
             sd.decoupling_pct,
             sd.cadence_avg
         FROM activities a
-        JOIN activity_streams_derived sd ON a.id = sd.activity_id
+        LEFT JOIN activity_streams_derived sd ON a.id = sd.activity_id
         WHERE a.category = 'running'
-          AND sd.pct_time_z2 >= 50
           AND a.distance_km >= 5
           AND {_date_filter('a')}
         ORDER BY a.start_date_local
     """).df()
+
+
+def zone2_pace_trend(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    """Kept for backwards compatibility — use run_pace_trend instead."""
+    return run_pace_trend(conn)
 
 
 def back_to_back_runs(conn: duckdb.DuckDBPyConnection, min_km: float = 15.0) -> pd.DataFrame:
@@ -465,8 +469,10 @@ def weekly_completion_summary(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
                      THEN 1 ELSE 0 END)                                               AS run_days,
             SUM(CASE WHEN d.session_type IN ('easy_run','quality_run','long_run','hills','race')
                           AND d.completed THEN 1 ELSE 0 END)                          AS run_days_done,
-            ROUND(SUM(CASE WHEN d.completed THEN 1 ELSE 0 END)::DOUBLE
-                  / NULLIF(COUNT(d.planned_date), 0) * 100, 0)                       AS completion_pct
+            ROUND(SUM(CASE WHEN d.session_type IN ('easy_run','quality_run','long_run','hills','race')
+                              AND d.completed THEN 1 ELSE 0 END)::DOUBLE
+                  / NULLIF(SUM(CASE WHEN d.session_type IN ('easy_run','quality_run','long_run','hills','race')
+                                    THEN 1 ELSE 0 END), 0) * 100, 0)               AS completion_pct
         FROM training_plan tp
         LEFT JOIN training_plan_daily d ON d.week_number = tp.week_number
         GROUP BY tp.week_number, tp.week_start_date, tp.phase,
