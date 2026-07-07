@@ -96,7 +96,7 @@ def render(conn) -> None:
 
     if not ef_df.empty:
         ef_sorted = ef_df.sort_values("week_start")
-        fig_ef = px.line(
+        fig_ef = px.scatter(
             ef_sorted, x="week_start", y="mean_ef",
             trendline="ols",
             title="Weekly Aerobic Efficiency Factor (speed ÷ HR)",
