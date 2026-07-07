@@ -270,3 +270,23 @@ def render(conn) -> None:
         )
     else:
         st.info("No elevation data yet.")
+
+    st.divider()
+    st.subheader("In-Session Physiological Fatigue")
+
+    pace_df = metrics.run_pace_trend(conn)
+    latest_decoupling = None
+    if not pace_df.empty and pace_df["decoupling_pct"].notna().any():
+        latest_decoupling = float(
+            pace_df.dropna(subset=["decoupling_pct"]).sort_values("activity_date")["decoupling_pct"].iloc[-1]
+        )
+
+    st.metric(
+        f"{flag(latest_decoupling, -5, 5)} Aerobic Decoupling",
+        f"{latest_decoupling:.1f}%" if latest_decoupling is not None else "—",
+    )
+    st.caption(
+        "How much heart rate drifts relative to pace in the second half of a run. "
+        "Below 5% = aerobic system holding up; above 5% = fatigue or heat forcing your heart to work harder. "
+        "**Full trend and Long Run Quality Score → Aerobic Performance tab.**"
+    )
