@@ -11,7 +11,7 @@ from db import get_conn, init_schema
 import metrics
 from highlights import build_highlights
 from shared import RACE_DATE, RACE_DISTANCE_KM
-from tabs import today, training_load, aerobic, race_prep, plan_history
+from tabs import today, fatigue, training_load, aerobic, race_prep, plan_history
 
 st.set_page_config(
     page_title="Comrades 2027 Training",
@@ -103,12 +103,15 @@ else:
     st.info(hl_text)
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
-tab_today, tab_load, tab_aerobic, tab_race, tab_plan = st.tabs(
-    ["Today", "Training Load", "Aerobic Performance", "Race Prep", "Plan & History"]
+tab_today, tab_fatigue, tab_load, tab_aerobic, tab_race, tab_plan = st.tabs(
+    ["Today", "Fatigue", "Training Load", "Aerobic Performance", "Race Prep", "Plan & History"]
 )
 
 with tab_today:
     today.render(conn)
+
+with tab_fatigue:
+    fatigue.render(conn)
 
 with tab_load:
     training_load.render(conn)
