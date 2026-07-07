@@ -3,7 +3,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from db import get_all_race_events
 import metrics
 from shared import RACE_DISTANCE_KM
 
@@ -128,119 +127,6 @@ def render(conn) -> None:
                 height=280,
             )
             st.plotly_chart(fig_lr, width="stretch")
-
-    st.divider()
-    st.subheader("Training Load & Fitness")
-
-    tsb_df = metrics.ctl_atl_tsb_history(conn, since=metrics.TRAINING_START, until=metrics.TRAINING_END)
-    if not tsb_df.empty:
-        tsb_df = tsb_df.sort_values("day")
-        fig_tsb = go.Figure()
-        fig_tsb.add_trace(go.Scatter(
-            x=tsb_df["day"], y=tsb_df["ctl"],
-            name="CTL (Fitness)", mode="lines",
-            line=dict(color="#2196F3", width=2),
-        ))
-        fig_tsb.add_trace(go.Scatter(
-            x=tsb_df["day"], y=tsb_df["atl"],
-            name="ATL (Fatigue)", mode="lines",
-            line=dict(color="#f44336", width=2),
-        ))
-        fig_tsb.add_trace(go.Scatter(
-            x=tsb_df["day"], y=tsb_df["tsb"],
-            name="TSB (Form)", mode="lines",
-            fill="tozeroy",
-            line=dict(color="#4CAF50", width=1),
-            yaxis="y2",
-            fillcolor="rgba(76,175,80,0.15)",
-        ))
-        for event in get_all_race_events(conn):
-            fig_tsb.add_vline(
-                x=str(event["race_date"]),
-                line_dash="dash", line_color="orange", line_width=1,
-                annotation_text=event["name"][:12],
-                annotation_position="top",
-            )
-        fig_tsb.update_layout(
-            title="CTL / ATL / TSB — Fitness, Fatigue & Form",
-            height=360,
-            yaxis=dict(title="Load units (CTL/ATL)"),
-            yaxis2=dict(title="Form (TSB)", overlaying="y", side="right", zeroline=True),
-            legend=dict(orientation="h"),
-        )
-        st.plotly_chart(fig_tsb, width="stretch")
-        st.caption(
-            "**CTL (blue)** — Chronic Training Load: 42-day exponential average of daily load. Your long-term fitness base. "
-            "Takes 6–8 weeks to move meaningfully — don't expect overnight gains.  \n"
-            "**ATL (red)** — Acute Training Load: 7-day exponential average. Reflects current fatigue. "
-            "Spikes after hard blocks, drops fast during rest weeks.  \n"
-            "**TSB (green area)** — Training Stress Balance (Form) = CTL − ATL. "
-            "Negative = fatigued/building. Positive = fresh/peaked. "
-            "**Target TSB +5 to +15 on race day** — too positive means you detrained, too negative means you're buried."
-        )
-    else:
-        st.info("No training load data yet. Run sync to populate fitness history.")
-
-    acwr_df = metrics.acwr_history(conn)
-    ramp_df = metrics.weekly_ramp_rate(conn)
-
-    col_acwr, col_ramp = st.columns(2)
-
-    with col_acwr:
-        if not acwr_df.empty:
-            fig_acwr = px.line(
-                acwr_df.sort_values("day"),
-                x="day", y="acwr",
-                title="ACWR History",
-                labels={"acwr": "ACWR", "day": "Date"},
-            )
-            fig_acwr.add_hrect(
-                y0=0.8, y1=1.3,
-                fillcolor="green", opacity=0.12, line_width=0,
-            )
-            fig_acwr.add_hline(y=0.8, line_dash="dash", line_color="green", line_width=1,
-                               annotation_text="0.8 floor", annotation_position="bottom right")
-            fig_acwr.add_hline(y=1.3, line_dash="dash", line_color="orange", line_width=1,
-                               annotation_text="1.3 caution", annotation_position="top right")
-            fig_acwr.add_hline(y=1.5, line_dash="dot", line_color="red", line_width=1,
-                               annotation_text="1.5 danger", annotation_position="top right")
-            fig_acwr.update_layout(height=300)
-            st.plotly_chart(fig_acwr, width="stretch")
-            st.caption(
-                "**ACWR** (Acute:Chronic Workload Ratio) = this week's load ÷ 4-week average. "
-                "Think of it as: how hard am I training *right now* relative to what my body is used to? "
-                "Below 0.8 = undertraining / deload. 0.8–1.3 = sweet spot. Above 1.5 = injury risk spikes sharply — "
-                "the 'danger zone' in the research literature."
-            )
-
-    with col_ramp:
-        if not ramp_df.empty:
-            ramp_sorted = ramp_df.dropna(subset=["ramp_pct"]).sort_values("week_start").tail(16)
-            bar_colors = [
-                "#e74c3c" if abs(r) > 15 else ("#f39c12" if abs(r) > 10 else "#2ecc71")
-                for r in ramp_sorted["ramp_pct"]
-            ]
-            fig_ramp = go.Figure(go.Bar(
-                x=ramp_sorted["week_start"],
-                y=ramp_sorted["ramp_pct"],
-                marker_color=bar_colors,
-            ))
-            fig_ramp.add_hline(y=10, line_dash="dash", line_color="#f39c12", line_width=1,
-                               annotation_text="+10%", annotation_position="top right")
-            fig_ramp.add_hline(y=-10, line_dash="dash", line_color="#f39c12", line_width=1,
-                               annotation_text="-10%", annotation_position="bottom right")
-            fig_ramp.update_layout(
-                title="Weekly Ramp Rate (last 16 weeks)",
-                xaxis_title="Week",
-                yaxis_title="Change (%)",
-                height=300,
-            )
-            st.plotly_chart(fig_ramp, width="stretch")
-            st.caption(
-                "Week-on-week % change in distance. The 10% rule is a simplification — "
-                "elite programs often ramp faster during base phase and cut sharply in taper. "
-                "What matters: **don't spike two big weeks in a row** without a deload."
-            )
 
     st.divider()
     st.subheader("Training Load by Category")
