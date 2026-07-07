@@ -205,3 +205,68 @@ def render(conn) -> None:
             "**Strain** = monotony × weekly load. Watch for weeks where both spike together — "
             "that combination is Foster's classic overtraining-risk signature."
         )
+
+    st.divider()
+    st.subheader("Session / Structural Risk")
+
+    long_pct_df = metrics.long_run_pct(conn)
+    b2b_df = metrics.back_to_back_runs(conn, min_km=15.0)
+    elev_df = metrics.weekly_elevation(conn)
+
+    latest_long_pct = (
+        long_pct_df["long_run_pct"].dropna().iloc[0]
+        if not long_pct_df.empty and long_pct_df["long_run_pct"].notna().any()
+        else None
+    )
+
+    b2b_count_4w = 0
+    if not b2b_df.empty:
+        cutoff = pd.Timestamp.now().normalize() - pd.Timedelta(days=28)
+        b2b_count_4w = int((pd.to_datetime(b2b_df["day1"]) >= cutoff).sum())
+    b2b_flag = "🟢" if b2b_count_4w <= 1 else ("🟡" if b2b_count_4w == 2 else "🔴")
+
+    sc1, sc2 = st.columns(2)
+    with sc1:
+        st.metric(f"{flag(latest_long_pct, 0, 35)} Long Run %", f"{latest_long_pct:.1f}%" if latest_long_pct is not None else "—")
+        st.caption("Longest run as % of weekly volume. Above **35% risks ITB** — spread load across more sessions.")
+    with sc2:
+        st.metric(f"{b2b_flag} Back-to-Back Long Runs (4wk)", b2b_count_4w)
+        st.caption("Long runs (≥15 km) on consecutive days in the trailing 4 weeks. **3+ = high recovery debt.**")
+
+    if not long_pct_df.empty:
+        fig_lrp = px.line(
+            long_pct_df.sort_values("week_start"), x="week_start", y="long_run_pct",
+            title="Long Run % of Weekly Volume", labels={"long_run_pct": "Long Run %", "week_start": "Week"},
+        )
+        fig_lrp.add_hline(y=35, line_dash="dash", line_color="red", line_width=1,
+                           annotation_text="35% ITB risk threshold")
+        fig_lrp.update_layout(height=280)
+        st.plotly_chart(fig_lrp, width="stretch")
+
+    if not b2b_df.empty:
+        st.caption("Recent back-to-back long-run instances:")
+        display_df = b2b_df.head(10)[["day1", "day2", "day1_km", "day2_km", "combined_km"]]
+        st.dataframe(display_df, width="stretch", hide_index=True)
+
+    if not elev_df.empty:
+        elev_sorted = elev_df.sort_values("week_start").copy()
+        elev_sorted["rolling_4w_avg"] = elev_sorted["weekly_gain_m"].rolling(4).mean().shift(1)
+        bar_colors = [
+            "#e74c3c" if (not pd.isna(avg) and avg > 0 and gain > avg * 1.5) else "#2196F3"
+            for gain, avg in zip(elev_sorted["weekly_gain_m"], elev_sorted["rolling_4w_avg"])
+        ]
+        fig_elev = go.Figure()
+        fig_elev.add_trace(go.Bar(x=elev_sorted["week_start"], y=elev_sorted["weekly_gain_m"],
+                                   marker_color=bar_colors, name="Elevation Gain"))
+        fig_elev.add_trace(go.Scatter(x=elev_sorted["week_start"], y=elev_sorted["rolling_4w_avg"],
+                                       name="4-Week Average", mode="lines",
+                                       line=dict(color="orange", width=2, dash="dot")))
+        fig_elev.update_layout(title="Weekly Elevation Gain (m)", xaxis_title="Week", yaxis_title="Elevation (m)", height=300)
+        st.plotly_chart(fig_elev, width="stretch")
+        st.caption(
+            "Bars flagged red when a week's climbing exceeds **1.5× the trailing 4-week average.** "
+            "Comrades is a 'down' run but still has real climbing — vertical gain adds muscular fatigue "
+            "that flat mileage alone won't show."
+        )
+    else:
+        st.info("No elevation data yet.")
