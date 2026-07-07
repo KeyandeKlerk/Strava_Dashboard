@@ -370,3 +370,25 @@ def test_ctl_atl_tsb_history_filters_output_by_since_until(mem_conn):
     assert (filtered["day"].astype(str) >= "2026-02-01").all()
     assert (filtered["day"].astype(str) <= "2026-02-28").all()
     assert len(filtered) < len(full)
+
+
+def test_weekly_efficiency_factor_empty_returns_empty_df(mem_conn):
+    df = metrics.weekly_efficiency_factor(mem_conn)
+    assert df.empty
+
+
+def test_weekly_efficiency_factor_excludes_single_run_weeks(mem_conn):
+    _insert_run_with_streams(mem_conn, 1, "2026-03-11T07:00:00", 15.0, 140.0, 10.0)
+    df = metrics.weekly_efficiency_factor(mem_conn)
+    assert df.empty
+
+
+def test_weekly_efficiency_factor_computes_weekly_mean(mem_conn):
+    _insert_run_with_streams(mem_conn, 1, "2026-03-11T07:00:00", 15.0, 140.0, 10.0)  # ef = 10/140
+    _insert_run_with_streams(mem_conn, 2, "2026-03-13T07:00:00", 18.0, 150.0, 12.0)  # ef = 12/150
+    df = metrics.weekly_efficiency_factor(mem_conn)
+    assert len(df) == 1
+    row = df.iloc[0]
+    assert row["run_count"] == 2
+    expected_mean = ((10.0 / 140.0) + (12.0 / 150.0)) / 2
+    assert row["mean_ef"] == pytest.approx(expected_mean, rel=0.01)

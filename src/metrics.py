@@ -335,6 +335,29 @@ def run_pace_trend(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     """).df()
 
 
+def weekly_efficiency_factor(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    return conn.execute(f"""
+        WITH per_run AS (
+            SELECT
+                DATE_TRUNC('week', a.start_date_local::DATE) AS week_start,
+                a.average_speed_kmh / a.average_heartrate AS ef
+            FROM activities a
+            WHERE a.category = 'running'
+              AND a.average_heartrate > 0
+              AND a.average_speed_kmh > 0
+              AND {_date_filter('a')}
+        )
+        SELECT
+            week_start,
+            ROUND(AVG(ef), 4) AS mean_ef,
+            COUNT(*) AS run_count
+        FROM per_run
+        GROUP BY 1
+        HAVING COUNT(*) >= 2
+        ORDER BY 1
+    """).df()
+
+
 def back_to_back_runs(conn: duckdb.DuckDBPyConnection, min_km: float = 15.0) -> pd.DataFrame:
     return conn.execute(f"""
         WITH runs AS (
