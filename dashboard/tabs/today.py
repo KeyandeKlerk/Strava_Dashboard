@@ -4,45 +4,11 @@ from datetime import date, timedelta
 import streamlit as st
 
 import metrics
-from shared import flag, render_daily_sessions
+from shared import render_daily_sessions
 
 
 def render(conn) -> None:
-    acwr_df = metrics.acwr_history(conn)
-    ramp_df = metrics.weekly_ramp_rate(conn)
-    mono_df = metrics.weekly_monotony(conn)
-    long_pct_df = metrics.long_run_pct(conn)
-
-    latest_acwr = acwr_df["acwr"].dropna().iloc[0] if not acwr_df.empty and acwr_df["acwr"].notna().any() else None
-    latest_ramp = ramp_df["ramp_pct"].dropna().iloc[0] if not ramp_df.empty and ramp_df["ramp_pct"].notna().any() else None
-    latest_mono = mono_df["monotony"].dropna().iloc[0] if not mono_df.empty and mono_df["monotony"].notna().any() else None
-    latest_long_pct = long_pct_df["long_run_pct"].dropna().iloc[0] if not long_pct_df.empty and long_pct_df["long_run_pct"].notna().any() else None
-
-    rc1, rc2, rc3, rc4 = st.columns(4)
-    with rc1:
-        st.metric(
-            f"{flag(latest_acwr, 0.8, 1.3)} ACWR",
-            f"{latest_acwr:.2f}" if latest_acwr is not None else "—",
-        )
-        st.caption("7-day load ÷ 4-week average. **0.8–1.3 = safe zone.** Above 1.5 spikes injury risk sharply.")
-    with rc2:
-        st.metric(
-            f"{flag(latest_ramp, -10, 10)} Weekly Ramp",
-            f"{latest_ramp:.1f}%" if latest_ramp is not None else "—",
-        )
-        st.caption("Week-on-week distance change. **Stay within ±10%** — jump more and injury risk doubles.")
-    with rc3:
-        st.metric(
-            f"{flag(latest_mono, 0, 1.5)} Monotony",
-            f"{latest_mono:.2f}" if latest_mono is not None else "—",
-        )
-        st.caption("Mean load ÷ SD of daily loads this week. Above **2.0 = training too repetitive** — every day feels the same, which spikes overuse risk. Alternate hard and easy days to keep this below 1.5.")
-    with rc4:
-        st.metric(
-            f"{flag(latest_long_pct, 0, 35)} Long Run %",
-            f"{latest_long_pct:.1f}%" if latest_long_pct is not None else "—",
-        )
-        st.caption("Longest run as % of weekly volume. Above **35% risks ITB** — spread load across more sessions.")
+    st.info("🩺 Fatigue, overreaching, and structural-risk indicators have moved to the **Fatigue** tab.")
 
     st.divider()
     st.subheader("This Week's Plan")
