@@ -32,7 +32,7 @@ def render(conn) -> None:
     fc1, fc2 = st.columns(2)
     with fc1:
         st.metric(
-            f"{flag(latest_tsb, -10, 10)} TSB (Form)",
+            "TSB (Form)",
             f"{latest_tsb:.1f}" if latest_tsb is not None else "—",
         )
         st.caption("CTL − ATL. **Target +5 to +15 on race day.** Negative = fatigued/building.")
