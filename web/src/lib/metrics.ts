@@ -924,7 +924,7 @@ export async function shoeMileage(conn: DuckDBConnection): Promise<ShoeMileageRo
      FROM gear g
      LEFT JOIN activities a
         ON a.gear_id = g.id AND a.category = 'running'
-     WHERE NOT g.is_retired
+     WHERE NOT COALESCE(g.is_retired, FALSE)
      GROUP BY g.id, g.name, g.type, g.retire_km_threshold, g.is_retired
      ORDER BY total_km DESC`,
   );
