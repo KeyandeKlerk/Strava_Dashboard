@@ -84,7 +84,10 @@ export async function getAthleteZones(accessToken: string): Promise<AthleteZones
   return stravaFetch("/athlete/zones", accessToken) as Promise<AthleteZonesResponse>;
 }
 
-export async function getGear(accessToken: string, gearId: string): Promise<{ name?: string } | null> {
+export async function getGear(
+  accessToken: string,
+  gearId: string,
+): Promise<{ name?: string; retired?: boolean } | null> {
   const url = new URL(`${API_BASE}/gear/${gearId}`);
   const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (resp.status !== 200) return null;

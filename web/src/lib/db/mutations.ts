@@ -393,10 +393,16 @@ export async function stampRaceActivity(conn: DuckDBConnection, raceEventId: num
   });
 }
 
-export async function upsertGear(conn: DuckDBConnection, gearId: string, gearName: string): Promise<void> {
+export async function upsertGear(
+  conn: DuckDBConnection,
+  gearId: string,
+  gearName: string,
+  isRetired = false,
+): Promise<void> {
   await conn.run(
-    "INSERT INTO gear (id, name) VALUES ($id, $name) ON CONFLICT (id) DO NOTHING",
-    { id: gearId, name: gearName },
+    `INSERT INTO gear (id, name, is_retired) VALUES ($id, $name, $is_retired)
+     ON CONFLICT (id) DO UPDATE SET name = excluded.name, is_retired = excluded.is_retired`,
+    { id: gearId, name: gearName, is_retired: isRetired },
   );
 }
 
