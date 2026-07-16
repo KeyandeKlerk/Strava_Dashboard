@@ -207,12 +207,18 @@ def upsert_streams_derived(conn: duckdb.DuckDBPyConnection, derived: dict) -> No
 
 
 def upsert_hr_zones(conn: duckdb.DuckDBPyConnection, zones: list[tuple[int, int]]) -> None:
-    conn.execute("DELETE FROM hr_zones")
-    for zone_number, (min_bpm, max_bpm) in enumerate(zones, start=1):
-        conn.execute(
-            "INSERT INTO hr_zones (zone_number, min_bpm, max_bpm) VALUES (?, ?, ?)",
-            [zone_number, min_bpm, max_bpm],
-        )
+    conn.execute("BEGIN TRANSACTION")
+    try:
+        conn.execute("DELETE FROM hr_zones")
+        for zone_number, (min_bpm, max_bpm) in enumerate(zones, start=1):
+            conn.execute(
+                "INSERT INTO hr_zones (zone_number, min_bpm, max_bpm) VALUES (?, ?, ?)",
+                [zone_number, min_bpm, max_bpm],
+            )
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
 
 
 def get_hr_zones(conn: duckdb.DuckDBPyConnection) -> list[tuple[int, int]]:
