@@ -27,7 +27,11 @@ function databasePath(): string {
 
 async function getInstance(): Promise<DuckDBInstance> {
   if (!instancePromise) {
-    instancePromise = DuckDBInstance.create(databasePath());
+    // Vercel's serverless filesystem is read-only except /tmp, and DuckDB
+    // (via the motherduck extension) needs a writable home directory for its
+    // own config/cache — without this it fails with "Can't find the home
+    // directory at ''". Harmless to set locally too.
+    instancePromise = DuckDBInstance.create(databasePath(), { home_directory: "/tmp" });
   }
   return instancePromise;
 }
