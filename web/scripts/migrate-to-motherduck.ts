@@ -116,7 +116,12 @@ async function main() {
   const mismatches: string[] = [];
   for (const table of TABLES_IN_ORDER) {
     console.log(`Copying ${table}...`);
-    await conn.run(`INSERT INTO md.${table} SELECT * FROM local.${table}`);
+    // `BY NAME` matches columns by name, not position — a plain `SELECT *`
+    // silently shifted values between gear_id/gear_name/synced_at on
+    // `activities`, since that table's columns were added via `ALTER TABLE
+    // ADD COLUMN` in the source file (appended at the end) but declared
+    // inline (different order) in this script's schema.
+    await conn.run(`INSERT INTO md.${table} BY NAME SELECT * FROM local.${table}`);
 
     const localCountReader = await conn.runAndReadAll(`SELECT COUNT(*) AS n FROM local.${table}`);
     const mdCountReader = await conn.runAndReadAll(`SELECT COUNT(*) AS n FROM md.${table}`);
