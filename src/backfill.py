@@ -36,6 +36,8 @@ def run_backfill(conn=None, force: bool = False) -> None:
             parsed_zones = _parse_hr_zones(zones_response)
             if parsed_zones:
                 upsert_hr_zones(conn, parsed_zones)
+            else:
+                print("Warning: Strava returned no HR zones, using cached zones")
         except Exception as e:
             print(f"Warning: failed to parse/cache HR zones response, using cached zones: {e}")
 
