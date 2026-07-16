@@ -94,3 +94,18 @@ fly apps destroy <app-name>
 This also removes the Fly volume holding the old local DuckDB file — make
 sure the MotherDuck migration (step 2) is confirmed correct first, since
 that's your only remaining copy of the data after this point.
+
+## Known gaps vs. the Streamlit version
+
+- **Periodization plan-builder not ported.** `src/periodization.py`'s `build_plan`
+  (generates a full periodized weekly plan from a race date + race calendar) is a
+  separate engine from the sync/race-detection logic and wasn't ported — it was out
+  of scope for this migration. Race Prep's "Add race" form saves the race but does
+  **not** regenerate the training plan the way the old "Save & rebuild plan" button
+  did. Use CSV import on Plan & History for now, or port `build_plan` as a follow-up
+  (it's pure computation, no I/O beyond the existing `db` mutation helpers, so it
+  should translate to TypeScript the same way `metrics.py` did).
+- **No OLS trendlines.** A few charts in the old dashboard (pace trend, EF trend,
+  quality score) drew a regression trendline via Plotly/statsmodels. The Recharts
+  ports show the same data without the fitted line — visual judgment call, not a
+  missing dependency that's hard to add if wanted.
