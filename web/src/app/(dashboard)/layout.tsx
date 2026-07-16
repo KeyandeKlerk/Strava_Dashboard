@@ -1,4 +1,5 @@
 import { BottomNav } from "@/components/BottomNav";
+import { PwaPrecache } from "@/components/PwaPrecache";
 import { getConnection } from "@/lib/db/client";
 import { getLastSynced } from "@/lib/db/mutations";
 
@@ -26,6 +27,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </div>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-20 pt-2">{children}</main>
       <BottomNav />
+      <PwaPrecache />
     </div>
   );
 }
