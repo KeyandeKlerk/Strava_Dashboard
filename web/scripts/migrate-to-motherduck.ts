@@ -87,13 +87,25 @@ async function main() {
     process.exit(1);
   }
 
+  // DuckDB's motherduck extension doesn't reliably parse `?motherduck_token=`
+  // as part of the ATTACH path in this version — it needs the token as its
+  // own `motherduck_token` env var, with a bare `md:<dbname>` attach target.
+  // Parse the documented MOTHERDUCK_DATABASE_URL format and split the two.
+  const match = motherduckUrl.match(/^md:([^?]+)(?:\?motherduck_token=(.+))?$/);
+  if (!match) {
+    console.error(`MOTHERDUCK_DATABASE_URL must look like md:<dbname>?motherduck_token=<token>, got: ${motherduckUrl}`);
+    process.exit(1);
+  }
+  const [, dbName, token] = match;
+  if (token) process.env.motherduck_token = token;
+
   const instance = await DuckDBInstance.create(":memory:");
   const conn = await instance.connect();
 
   console.log(`Attaching local DB: ${localPath}`);
   await conn.run(`ATTACH '${localPath}' AS local (READ_ONLY)`);
   console.log("Attaching MotherDuck DB");
-  await conn.run(`ATTACH '${motherduckUrl}' AS md`);
+  await conn.run(`ATTACH 'md:${dbName}' AS md`);
 
   console.log("Creating schema on MotherDuck (if not present)");
   for (const statement of SCHEMA_STATEMENTS) {
