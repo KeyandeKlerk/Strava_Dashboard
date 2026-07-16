@@ -25,13 +25,19 @@ def run_backfill(conn=None, force: bool = False) -> None:
 
     access_token = strava_client.refresh_access_token()
 
+    zones_response = None
     try:
         zones_response = strava_client.get_athlete_zones(access_token)
-        parsed_zones = _parse_hr_zones(zones_response)
-        if parsed_zones:
-            upsert_hr_zones(conn, parsed_zones)
     except Exception as e:
         print(f"Warning: failed to fetch HR zones from Strava, using cached zones: {e}")
+
+    if zones_response is not None:
+        try:
+            parsed_zones = _parse_hr_zones(zones_response)
+            if parsed_zones:
+                upsert_hr_zones(conn, parsed_zones)
+        except Exception as e:
+            print(f"Warning: failed to parse/cache HR zones response, using cached zones: {e}")
 
     hr_zones = get_hr_zones(conn)
 
