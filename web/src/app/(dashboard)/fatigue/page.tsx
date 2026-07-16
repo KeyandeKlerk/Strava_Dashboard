@@ -40,10 +40,16 @@ export default async function FatiguePage() {
           : "→"
       : "→";
 
+  // acwr/ramp/mono come back most-recent-first (so firstNonNull below finds
+  // the latest value), but charts need chronological (ascending) order —
+  // Recharts renders array order left-to-right, so passing these as-is would
+  // draw the x-axis backwards.
   const latestAcwr = firstNonNull(acwr, "acwr");
   const latestRamp = firstNonNull(ramp, "ramp_pct");
   const latestMono = firstNonNull(mono, "monotony");
 
+  const acwrSorted = [...acwr].sort((a, b) => (a.day < b.day ? -1 : 1));
+  const rampSorted = [...ramp].sort((a, b) => (a.day < b.day ? -1 : 1));
   const monoSorted = [...mono].sort((a, b) => (a.day < b.day ? -1 : 1));
   const strainVals = monoSorted.map((r) => r.strain);
   let latestStrain: number | null = null;
@@ -105,17 +111,17 @@ export default async function FatiguePage() {
         </div>
         {acwr.length > 0 && (
           <div className="mt-3">
-            <AcwrChart data={acwr} />
+            <AcwrChart data={acwrSorted} />
           </div>
         )}
         {ramp.length > 0 && (
           <div className="mt-3">
-            <RampRateChart data={ramp} />
+            <RampRateChart data={rampSorted} />
           </div>
         )}
         {mono.length > 0 && (
           <div className="mt-3">
-            <MonotonyStrainChart data={mono} />
+            <MonotonyStrainChart data={monoSorted} />
           </div>
         )}
       </div>

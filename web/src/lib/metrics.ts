@@ -821,7 +821,7 @@ export async function longRunQualityScores(conn: DuckDBConnection): Promise<Long
      JOIN activity_streams_derived s ON a.id = s.activity_id
      WHERE a.category = 'running'
        AND a.distance_km >= 20
-     ORDER BY a.start_date_local DESC`,
+     ORDER BY a.start_date_local`,
   );
 }
 
