@@ -32,10 +32,20 @@ async function getInstance(): Promise<DuckDBInstance> {
   return instancePromise;
 }
 
+// MotherDuck already has the schema (created by the one-time migration) —
+// running `CREATE TABLE IF NOT EXISTS` against it on every request causes
+// "TransactionContext Error: Catalog write-write conflict" under concurrent
+// requests, since MotherDuck uses optimistic concurrency and DDL isn't safe
+// to race across connections. Only local/test runs against a fresh
+// `:memory:` instance need this.
+const usingMotherDuck = Boolean(process.env.DUCKDB_DATABASE_URL);
+
 export async function getConnection(): Promise<DuckDBConnection> {
   const instance = await getInstance();
   const connection = await instance.connect();
-  await initSchema((sql) => connection.run(sql));
+  if (!usingMotherDuck) {
+    await initSchema((sql) => connection.run(sql));
+  }
   return connection;
 }
 
