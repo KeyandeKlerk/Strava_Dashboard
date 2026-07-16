@@ -1,7 +1,4 @@
-HR_ZONES = [(0, 130), (130, 148), (148, 162), (162, 174), (174, 9999)]
-
-
-def compute_streams_derived(streams: dict, activity: dict) -> dict:
+def compute_streams_derived(streams: dict, activity: dict, hr_zones: list[tuple[int, int]]) -> dict:
     hr_data = streams.get("heartrate", {}).get("data", [])
     alt_data = streams.get("altitude", {}).get("data", [])
     vel_data = streams.get("velocity_smooth", {}).get("data", [])
@@ -18,9 +15,9 @@ def compute_streams_derived(streams: dict, activity: dict) -> dict:
             elevation_loss += abs(delta)
 
     # Time in HR zones
-    zone_counts = [0] * 5
+    zone_counts = [0] * len(hr_zones)
     for hr in hr_data:
-        for i, (lo, hi) in enumerate(HR_ZONES):
+        for i, (lo, hi) in enumerate(hr_zones):
             if lo <= hr < hi:
                 zone_counts[i] += 1
                 break

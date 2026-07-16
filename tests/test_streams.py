@@ -28,6 +28,8 @@ SAMPLE_STREAMS = {
 
 ACTIVITY = {"id": 1001}
 
+TEST_HR_ZONES = [(0, 130), (130, 148), (148, 162), (162, 174), (174, 9999)]
+
 
 def test_compute_elevation_loss():
     streams = {
@@ -37,13 +39,13 @@ def test_compute_elevation_loss():
         "grade_smooth": {"data": []},
         "cadence": {"data": []},
     }
-    result = compute_streams_derived(streams, ACTIVITY)
+    result = compute_streams_derived(streams, ACTIVITY, TEST_HR_ZONES)
     # descents: 105→103 = 2m, 103→100 = 3m, 100→98 = 2m → total 7m
     assert result["elevation_loss_m"] == pytest.approx(7.0)
 
 
 def test_compute_pct_time_zones_sums_to_100():
-    result = compute_streams_derived(SAMPLE_STREAMS, ACTIVITY)
+    result = compute_streams_derived(SAMPLE_STREAMS, ACTIVITY, TEST_HR_ZONES)
     total = (
         result["pct_time_z1"] + result["pct_time_z2"] + result["pct_time_z3"]
         + result["pct_time_z4"] + result["pct_time_z5"]
@@ -51,15 +53,30 @@ def test_compute_pct_time_zones_sums_to_100():
     assert total == pytest.approx(100.0, abs=0.5)
 
 
+def test_compute_pct_time_zones_uses_injected_boundaries():
+    custom_zones = [(0, 100), (100, 200), (200, 300), (300, 400), (400, 9999)]
+    streams = {
+        "heartrate": {"data": [150] * 200},  # falls in custom zone 2 (100-200)
+        "altitude": {"data": []},
+        "velocity_smooth": {"data": []},
+        "grade_smooth": {"data": []},
+        "cadence": {"data": []},
+    }
+    result = compute_streams_derived(streams, ACTIVITY, custom_zones)
+    assert result["pct_time_z2"] == pytest.approx(100.0)
+    assert result["pct_time_z1"] == pytest.approx(0.0)
+    assert result["pct_time_z3"] == pytest.approx(0.0)
+
+
 def test_compute_cadence_avg():
     streams = {**SAMPLE_STREAMS, "cadence": {"data": [86] * 100 + [88] * 100}}
-    result = compute_streams_derived(streams, ACTIVITY)
+    result = compute_streams_derived(streams, ACTIVITY, TEST_HR_ZONES)
     # Cadence doubled: avg of 86+88=87, doubled = 174
     assert result["cadence_avg"] == pytest.approx(174.0)
 
 
 def test_compute_decoupling_returns_float():
-    result = compute_streams_derived(SAMPLE_STREAMS, ACTIVITY)
+    result = compute_streams_derived(SAMPLE_STREAMS, ACTIVITY, TEST_HR_ZONES)
     assert isinstance(result["decoupling_pct"], float)
 
 
@@ -71,11 +88,11 @@ def test_compute_gap_flat_course():
         "grade_smooth": {"data": [0.0] * 200},
         "cadence": {"data": [86] * 200},
     }
-    result = compute_streams_derived(flat_streams, ACTIVITY)
+    result = compute_streams_derived(flat_streams, ACTIVITY, TEST_HR_ZONES)
     # On flat course (grade=0), GAP = actual pace = 3.0 m/s → 1000/60/3.0 = 5.556 min/km
     assert result["grade_adjusted_pace"] == pytest.approx(5.56, rel=0.05)
 
 
 def test_activity_id_in_result():
-    result = compute_streams_derived(SAMPLE_STREAMS, ACTIVITY)
+    result = compute_streams_derived(SAMPLE_STREAMS, ACTIVITY, TEST_HR_ZONES)
     assert result["activity_id"] == 1001
