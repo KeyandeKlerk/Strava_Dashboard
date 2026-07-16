@@ -7,10 +7,22 @@ import { initSchema } from "./schema";
 
 let instancePromise: Promise<DuckDBInstance> | null = null;
 
+// ":memory:" is used by tests (see test/dbTestHelper.ts). In production,
+// DUCKDB_DATABASE_URL is "md:<database>?motherduck_token=<token>" — but
+// DuckDB's motherduck extension doesn't reliably parse `?motherduck_token=`
+// as part of the attach path (same issue hit in scripts/migrate-to-motherduck.ts).
+// It needs the token as its own `motherduck_token` env var and a bare
+// `md:<dbname>` path.
 function databasePath(): string {
-  // ":memory:" is used by tests (see test/dbTestHelper.ts). In production,
-  // DUCKDB_DATABASE_URL is "md:<database>?motherduck_token=<token>".
-  return process.env.DUCKDB_DATABASE_URL ?? ":memory:";
+  const url = process.env.DUCKDB_DATABASE_URL;
+  if (!url) return ":memory:";
+
+  const match = url.match(/^md:([^?]+)(?:\?motherduck_token=(.+))?$/);
+  if (!match) return url;
+
+  const [, dbName, token] = match;
+  if (token) process.env.motherduck_token = token;
+  return `md:${dbName}`;
 }
 
 async function getInstance(): Promise<DuckDBInstance> {
