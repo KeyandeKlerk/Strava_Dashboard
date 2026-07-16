@@ -42,36 +42,53 @@ RAW_ACTIVITIES = [
     },
 ]
 
+FAKE_ZONES_RESPONSE = {
+    "heart_rate": {
+        "custom_zones": True,
+        "zones": [
+            {"min": 0, "max": 130},
+            {"min": 130, "max": 148},
+            {"min": 148, "max": 162},
+            {"min": 162, "max": 174},
+            {"min": 174, "max": -1},
+        ],
+    }
+}
 
+
+@patch("sync.strava_client.get_athlete_zones", return_value=FAKE_ZONES_RESPONSE)
 @patch("sync.strava_client.get_activities", return_value=RAW_ACTIVITIES)
 @patch("sync.strava_client.refresh_access_token", return_value="fake_token")
-def test_sync_inserts_activities(mock_token, mock_get, mem_conn):
+def test_sync_inserts_activities(mock_token, mock_get, mock_zones, mem_conn):
     run_sync(mem_conn)
     count = mem_conn.execute("SELECT COUNT(*) FROM activities").fetchone()[0]
     assert count == 2
 
 
+@patch("sync.strava_client.get_athlete_zones", return_value=FAKE_ZONES_RESPONSE)
 @patch("sync.strava_client.get_activities", return_value=RAW_ACTIVITIES)
 @patch("sync.strava_client.refresh_access_token", return_value="fake_token")
-def test_sync_updates_last_synced(mock_token, mock_get, mem_conn):
+def test_sync_updates_last_synced(mock_token, mock_get, mock_zones, mem_conn):
     run_sync(mem_conn)
     ts = get_last_synced(mem_conn)
     assert ts is not None
     assert ts > 0
 
 
+@patch("sync.strava_client.get_athlete_zones", return_value=FAKE_ZONES_RESPONSE)
 @patch("sync.strava_client.get_activities", return_value=RAW_ACTIVITIES)
 @patch("sync.strava_client.refresh_access_token", return_value="fake_token")
-def test_sync_is_idempotent(mock_token, mock_get, mem_conn):
+def test_sync_is_idempotent(mock_token, mock_get, mock_zones, mem_conn):
     run_sync(mem_conn)
     run_sync(mem_conn)
     count = mem_conn.execute("SELECT COUNT(*) FROM activities").fetchone()[0]
     assert count == 2
 
 
+@patch("sync.strava_client.get_athlete_zones", return_value=FAKE_ZONES_RESPONSE)
 @patch("sync.strava_client.get_activities", return_value=RAW_ACTIVITIES)
 @patch("sync.strava_client.refresh_access_token", return_value="fake_token")
-def test_sync_passes_after_timestamp_on_incremental(mock_token, mock_get, mem_conn):
+def test_sync_passes_after_timestamp_on_incremental(mock_token, mock_get, mock_zones, mem_conn):
     from db import set_last_synced
     set_last_synced(mem_conn, 1710500000)
     run_sync(mem_conn)
@@ -79,10 +96,11 @@ def test_sync_passes_after_timestamp_on_incremental(mock_token, mock_get, mem_co
     assert call_kwargs.get("after") == 1710500000
 
 
+@patch("sync.strava_client.get_athlete_zones", return_value=FAKE_ZONES_RESPONSE)
 @patch("sync.strava_client.get_activities")
 @patch("sync.strava_client.get_gear", return_value={"name": "Nike Alphafly"})
 @patch("sync.strava_client.refresh_access_token", return_value="fake_token")
-def test_sync_populates_gear_table(mock_token, mock_gear, mock_acts, mem_conn):
+def test_sync_populates_gear_table(mock_token, mock_gear, mock_acts, mock_zones, mem_conn):
     mock_acts.return_value = [{
         "id": 55555,
         "name": "Morning Run",
