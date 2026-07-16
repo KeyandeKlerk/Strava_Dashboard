@@ -1,5 +1,4 @@
-import { getConnection } from "@/lib/db/client";
-import { dailyPlanForWeek, longRunHistory, recentActivities, weeklyCompletionSummary } from "@/lib/metrics";
+import { getPlanHistoryPageData } from "@/lib/pageData";
 import { fmtPace } from "@/lib/shared";
 import { CsvImportForm } from "@/components/CsvImportForm";
 import { WeekExplorer } from "@/components/WeekExplorer";
@@ -7,26 +6,7 @@ import { WeekExplorer } from "@/components/WeekExplorer";
 export const runtime = "nodejs";
 
 export default async function PlanHistoryPage() {
-  const conn = await getConnection();
-  const [longRuns, recent, weekSummary] = await Promise.all([
-    longRunHistory(conn, 20.0),
-    recentActivities(conn, 15),
-    weeklyCompletionSummary(conn),
-  ]);
-
-  const today = new Date().toISOString().slice(0, 10);
-  const dailyEntries = await Promise.all(
-    weekSummary.map(async (w) => [w.week_number, await dailyPlanForWeek(conn, w.week_number)] as const),
-  );
-  const dailyByWeek = Object.fromEntries(dailyEntries);
-
-  const defaultWeek =
-    weekSummary.find((w) => {
-      const end = new Date(new Date(`${w.week_start_date}T00:00:00`).getTime() + 7 * 86400000)
-        .toISOString()
-        .slice(0, 10);
-      return w.week_start_date <= today && today < end;
-    })?.week_number ?? weekSummary[0]?.week_number;
+  const { longRuns, recent, weekSummary, dailyByWeek, defaultWeek, today } = await getPlanHistoryPageData();
 
   return (
     <div className="space-y-6">

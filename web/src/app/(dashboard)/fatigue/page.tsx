@@ -1,16 +1,4 @@
-import { getConnection } from "@/lib/db/client";
-import {
-  acwrHistory,
-  backToBackRuns,
-  ctlAtlTsbHistory,
-  longRunPct,
-  runPaceTrend,
-  TRAINING_END,
-  TRAINING_START,
-  weeklyEfficiencyFactor,
-  weeklyMonotony,
-  weeklyRampRate,
-} from "@/lib/metrics";
+import { getFatiguePageData } from "@/lib/pageData";
 import { flag } from "@/lib/shared";
 import { StatCard } from "@/components/StatCard";
 import {
@@ -37,17 +25,7 @@ function fourWeeksAgoMs(): number {
 }
 
 export default async function FatiguePage() {
-  const conn = await getConnection();
-  const [tsb, ef, acwr, ramp, mono, longPct, b2b] = await Promise.all([
-    ctlAtlTsbHistory(conn, TRAINING_START ?? undefined, TRAINING_END ?? undefined),
-    weeklyEfficiencyFactor(conn),
-    acwrHistory(conn),
-    weeklyRampRate(conn),
-    weeklyMonotony(conn),
-    longRunPct(conn),
-    backToBackRuns(conn, 15.0),
-  ]);
-  const paceTrend = await runPaceTrend(conn);
+  const { tsb, ef, acwr, ramp, mono, longPct, b2b, paceTrend } = await getFatiguePageData();
 
   const latestTsb = tsb.length > 0 ? tsb[tsb.length - 1].tsb : null;
   const efSorted = [...ef].sort((a, b) => (a.week_start < b.week_start ? -1 : 1));

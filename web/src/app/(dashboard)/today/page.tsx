@@ -1,18 +1,12 @@
-import { getConnection } from "@/lib/db/client";
-import { dailyPlanForWeek, weeklyCompletionSummary } from "@/lib/metrics";
+import { getTodayPageData } from "@/lib/pageData";
 import { DailySessionList } from "@/components/DailySessionList";
 
 export const runtime = "nodejs";
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export default async function TodayPage() {
-  const conn = await getConnection();
-  const weekSummary = await weeklyCompletionSummary(conn);
+  const { weekSummary, today, current, daily } = await getTodayPageData();
 
-  if (weekSummary.length === 0) {
+  if (weekSummary.length === 0 || !current) {
     return (
       <div>
         <h1 className="text-lg font-semibold">This Week&apos;s Plan</h1>
@@ -24,18 +18,7 @@ export default async function TodayPage() {
     );
   }
 
-  const today = todayIso();
-  const current =
-    weekSummary.find((w) => {
-      const start = w.week_start_date;
-      const end = new Date(new Date(`${start}T00:00:00`).getTime() + 7 * 86400000)
-        .toISOString()
-        .slice(0, 10);
-      return start <= today && today < end;
-    }) ?? weekSummary[0];
-
   const pct = Math.round(current.completion_pct ?? 0);
-  const daily = await dailyPlanForWeek(conn, current.week_number);
 
   return (
     <div className="space-y-4">

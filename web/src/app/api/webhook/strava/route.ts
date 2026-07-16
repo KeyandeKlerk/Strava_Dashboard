@@ -2,8 +2,10 @@
 // must run on the Node.js runtime (not Edge).
 import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
+import { revalidateTag } from "next/cache";
 import { getConnection } from "@/lib/db/client";
 import { runSync } from "@/lib/strava/sync";
+import { DASHBOARD_DATA_TAG } from "@/lib/pageData";
 
 export const runtime = "nodejs";
 
@@ -29,6 +31,13 @@ export async function POST(request: NextRequest) {
       const conn = await getConnection();
       try {
         await runSync(conn);
+        // Only invalidate the dashboard's cached data once sync actually
+        // succeeds — a failed sync shouldn't force every page to re-query
+        // MotherDuck for data that hasn't changed. `{ expire: 0 }` forces
+        // immediate expiration (next request blocks on fresh data) rather
+        // than the default `'max'` stale-while-revalidate profile, which
+        // would serve one more stale page load before refreshing.
+        revalidateTag(DASHBOARD_DATA_TAG, { expire: 0 });
       } catch (err) {
         console.error("Sync failed:", err);
       }

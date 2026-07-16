@@ -1,7 +1,8 @@
 "use server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { getConnection } from "@/lib/db/client";
 import { upsertRaceEvent } from "@/lib/db/mutations";
+import { DASHBOARD_DATA_TAG } from "@/lib/pageData";
 
 // Note: the original Streamlit version also called `build_plan(...)` here to
 // regenerate the full periodized training plan after adding a race. That
@@ -23,5 +24,6 @@ export async function addRaceEvent(formData: FormData): Promise<void> {
     notes: String(formData.get("notes") ?? "").trim() || null,
   });
 
+  updateTag(DASHBOARD_DATA_TAG);
   revalidatePath("/race-prep");
 }

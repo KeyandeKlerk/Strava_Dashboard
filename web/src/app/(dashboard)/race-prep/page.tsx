@@ -1,68 +1,13 @@
-import { getConnection, queryRow } from "@/lib/db/client";
-import { getAllRaceEvents } from "@/lib/db/mutations";
-import {
-  backToBackRuns,
-  comradesMilestones,
-  comradesProjectedSplits,
-  COMRADES_CHECKPOINTS,
-  shoeMileage,
-  weeklyElevation,
-} from "@/lib/metrics";
-import { BANDS, RACE_DATE, RACE_DISTANCE_KM, fmtPace } from "@/lib/shared";
+import { getRacePrepPageData } from "@/lib/pageData";
+import { RACE_DATE, fmtPace } from "@/lib/shared";
 import { ElevationProfileChart, WeeklyElevationChart } from "@/components/charts/RaceCharts";
 import { addRaceEvent } from "./actions";
 
 export const runtime = "nodejs";
 
-interface RaceEventRow {
-  id: number;
-  name: string;
-  race_date: string;
-  distance_km: number;
-  priority: string;
-  target_finish_h: number | null;
-  notes: string | null;
-  strava_activity_id: number | null;
-}
-
 export default async function RacePrepPage() {
-  const conn = await getConnection();
-  const [races, milestones, b2b, elevation, splits, shoes] = await Promise.all([
-    getAllRaceEvents<RaceEventRow>(conn),
-    comradesMilestones(conn, RACE_DISTANCE_KM),
-    backToBackRuns(conn),
-    weeklyElevation(conn),
-    comradesProjectedSplits(conn),
-    shoeMileage(conn),
-  ]);
-
-  const today = new Date().toISOString().slice(0, 10);
-  const analysed = races.filter((r) => r.strava_activity_id);
-  const analyses = await Promise.all(
-    analysed.map((r) =>
-      queryRow<{ avg_pace_min_km: number | null; comrades_projection_h: number | null; computed_at: string }>(
-        conn,
-        "SELECT avg_pace_min_km, comrades_projection_h::VARCHAR AS comrades_projection_h, computed_at::VARCHAR AS computed_at FROM race_analysis WHERE race_event_id = $id",
-        { id: r.id },
-      ),
-    ),
-  );
-
-  const elevationProfile = COMRADES_CHECKPOINTS.map(([checkpoint, km, elevation_m]) => ({ checkpoint, km, elevation_m }));
-
-  // Precomputed (not mutated during JSX mapping): each band is "on track" if
-  // the projection falls in [previous band's cutoff, this band's cutoff).
-  const bandRows = BANDS.reduce<Array<{ medal: string; label: string; onTrack: boolean }>>(
-    (rows, [medal, label, cutoffH]) => {
-      const prevH = rows.length > 0 ? BANDS[rows.length - 1][2] : 0;
-      const onTrack =
-        milestones.projected_finish_h != null &&
-        prevH <= milestones.projected_finish_h &&
-        milestones.projected_finish_h < cutoffH;
-      return [...rows, { medal, label, onTrack }];
-    },
-    [],
-  );
+  const { races, milestones, b2b, elevation, splits, shoes, today, analysed, analyses, elevationProfile, bandRows } =
+    await getRacePrepPageData();
 
   return (
     <div className="space-y-6">

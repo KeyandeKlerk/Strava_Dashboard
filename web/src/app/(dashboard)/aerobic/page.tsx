@@ -1,5 +1,4 @@
-import { getConnection } from "@/lib/db/client";
-import { longRunQualityScores, runPaceTrend, weeklyZoneTime } from "@/lib/metrics";
+import { getAerobicPageData } from "@/lib/pageData";
 import { flag } from "@/lib/shared";
 import { StatCard } from "@/components/StatCard";
 import {
@@ -13,20 +12,7 @@ import {
 export const runtime = "nodejs";
 
 export default async function AerobicPage() {
-  const conn = await getConnection();
-  const [zoneTime, paceTrend, qualityScores] = await Promise.all([
-    weeklyZoneTime(conn),
-    runPaceTrend(conn),
-    longRunQualityScores(conn),
-  ]);
-
-  const zoneSorted = [...zoneTime].sort((a, b) => (a.week_start < b.week_start ? -1 : 1));
-  const withEasyPct = zoneSorted.map((z) => {
-    const total = z.z1_min + z.z2_min + z.z3_min + z.z4_min + z.z5_min;
-    return { week_start: z.week_start, easy_pct: total > 0 ? ((z.z1_min + z.z2_min) / total) * 100 : null };
-  });
-  const easyPctValues = withEasyPct.filter((z) => z.easy_pct != null);
-  const latestEasyPct = easyPctValues.length > 0 ? easyPctValues[easyPctValues.length - 1].easy_pct : null;
+  const { zoneSorted, withEasyPct, latestEasyPct, paceTrend, qualityScores } = await getAerobicPageData();
 
   return (
     <div className="space-y-6">
