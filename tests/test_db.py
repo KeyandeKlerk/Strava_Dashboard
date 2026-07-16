@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from db import init_schema, upsert_activity, upsert_streams_derived, get_last_synced, set_last_synced, get_refresh_token, set_refresh_token
+from db import init_schema, upsert_activity, upsert_streams_derived, get_last_synced, set_last_synced, get_refresh_token, set_refresh_token, upsert_hr_zones, get_hr_zones
 
 
 SAMPLE_ACTIVITY = {
@@ -260,3 +260,23 @@ def test_set_refresh_token_overwrites_existing(mem_conn):
     set_refresh_token(mem_conn, "old_token")
     set_refresh_token(mem_conn, "new_token")
     assert get_refresh_token(mem_conn) == "new_token"
+
+
+def test_upsert_hr_zones_and_get_roundtrip(mem_conn):
+    upsert_hr_zones(mem_conn, [(0, 130), (130, 148), (148, 162), (162, 174), (174, 9999)])
+    zones = get_hr_zones(mem_conn)
+    assert zones == [(0, 130), (130, 148), (148, 162), (162, 174), (174, 9999)]
+
+
+def test_upsert_hr_zones_replaces_not_duplicates(mem_conn):
+    upsert_hr_zones(mem_conn, [(0, 130), (130, 148), (148, 162), (162, 174), (174, 9999)])
+    upsert_hr_zones(mem_conn, [(0, 120), (120, 140), (140, 160), (160, 180), (180, 9999)])
+    zones = get_hr_zones(mem_conn)
+    assert zones == [(0, 120), (120, 140), (140, 160), (160, 180), (180, 9999)]
+    count = mem_conn.execute("SELECT COUNT(*) FROM hr_zones").fetchone()[0]
+    assert count == 5
+
+
+def test_get_hr_zones_raises_when_empty(mem_conn):
+    with pytest.raises(RuntimeError):
+        get_hr_zones(mem_conn)

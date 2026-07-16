@@ -46,6 +46,13 @@ def init_schema(conn: duckdb.DuckDBPyConnection) -> None:
         )
     """)
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS hr_zones (
+            zone_number INTEGER PRIMARY KEY,
+            min_bpm INTEGER,
+            max_bpm INTEGER
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS training_plan (
             week_number INTEGER PRIMARY KEY,
             week_start_date DATE,
@@ -197,6 +204,27 @@ def upsert_streams_derived(conn: duckdb.DuckDBPyConnection, derived: dict) -> No
         derived.get("pct_time_z4"), derived.get("pct_time_z5"),
         derived.get("grade_adjusted_pace"), derived.get("cadence_avg"),
     ])
+
+
+def upsert_hr_zones(conn: duckdb.DuckDBPyConnection, zones: list[tuple[int, int]]) -> None:
+    conn.execute("DELETE FROM hr_zones")
+    for zone_number, (min_bpm, max_bpm) in enumerate(zones, start=1):
+        conn.execute(
+            "INSERT INTO hr_zones (zone_number, min_bpm, max_bpm) VALUES (?, ?, ?)",
+            [zone_number, min_bpm, max_bpm],
+        )
+
+
+def get_hr_zones(conn: duckdb.DuckDBPyConnection) -> list[tuple[int, int]]:
+    rows = conn.execute(
+        "SELECT min_bpm, max_bpm FROM hr_zones ORDER BY zone_number"
+    ).fetchall()
+    if not rows:
+        raise RuntimeError(
+            "No HR zones cached. Run authorize.py to grant the profile:read_all "
+            "scope, then run sync.py to fetch zones from Strava."
+        )
+    return [(r[0], r[1]) for r in rows]
 
 
 def upsert_training_plan_week(conn: duckdb.DuckDBPyConnection, week: dict) -> None:
