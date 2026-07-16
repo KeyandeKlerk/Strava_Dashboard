@@ -35,7 +35,7 @@ def authorize() -> None:
         "client_id": client_id,
         "redirect_uri": REDIRECT_URI,
         "response_type": "code",
-        "scope": "activity:read_all",
+        "scope": "activity:read_all,profile:read_all",
     }
     url = f"{AUTH_URL}?{urlencode(params)}"
     print(f"Opening browser for Strava authorization...\nURL: {url}")
