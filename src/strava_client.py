@@ -80,6 +80,13 @@ def get_activity_streams(access_token: str, activity_id: int) -> dict:
     return resp.json()
 
 
+def get_athlete_zones(access_token: str) -> dict:
+    headers = {"Authorization": f"Bearer {access_token}"}
+    resp = requests.get(f"{API_BASE}/athlete/zones", headers=headers)
+    resp.raise_for_status()
+    return resp.json()
+
+
 def get_gear(access_token: str, gear_id: str) -> dict | None:
     headers = {"Authorization": f"Bearer {access_token}"}
     resp = requests.get(f"{API_BASE}/gear/{gear_id}", headers=headers)

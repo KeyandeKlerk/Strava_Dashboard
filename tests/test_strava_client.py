@@ -5,7 +5,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from unittest.mock import patch, MagicMock, call
-from strava_client import refresh_access_token, get_activities, get_activity_streams
+from strava_client import refresh_access_token, get_activities, get_activity_streams, get_athlete_zones
 
 
 @patch("strava_client.get_refresh_token", return_value=None)
@@ -114,3 +114,29 @@ def test_get_activity_streams_returns_dict(mock_get):
     streams = get_activity_streams("token", activity_id=9999)
     assert "heartrate" in streams
     assert streams["heartrate"]["data"] == [140, 145, 150]
+
+
+@patch("strava_client.requests.get")
+def test_get_athlete_zones_returns_parsed_json(mock_get):
+    mock_get.return_value.json.return_value = {
+        "heart_rate": {
+            "custom_zones": True,
+            "zones": [
+                {"min": 0, "max": 130},
+                {"min": 130, "max": 148},
+                {"min": 148, "max": 162},
+                {"min": 162, "max": 174},
+                {"min": 174, "max": -1},
+            ],
+        }
+    }
+    mock_get.return_value.raise_for_status = MagicMock()
+
+    result = get_athlete_zones("fake_token")
+
+    assert result["heart_rate"]["zones"][0] == {"min": 0, "max": 130}
+    assert result["heart_rate"]["zones"][-1]["max"] == -1
+    called_url = mock_get.call_args.args[0]
+    assert called_url.endswith("/athlete/zones")
+    called_headers = mock_get.call_args.kwargs["headers"]
+    assert called_headers["Authorization"] == "Bearer fake_token"
