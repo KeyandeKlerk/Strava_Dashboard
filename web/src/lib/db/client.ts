@@ -30,7 +30,10 @@ async function getInstance(): Promise<DuckDBInstance> {
     // Vercel's serverless filesystem is read-only except /tmp, and DuckDB
     // (via the motherduck extension) needs a writable home directory for its
     // own config/cache — without this it fails with "Can't find the home
-    // directory at ''". Harmless to set locally too.
+    // directory at ''". Belt-and-suspenders: some lookups read $HOME
+    // directly (bypassing DuckDB's own config), others only respect the
+    // `home_directory` instance-creation option, so set both.
+    process.env.HOME ||= "/tmp";
     instancePromise = DuckDBInstance.create(databasePath(), { home_directory: "/tmp" });
   }
   return instancePromise;
@@ -47,6 +50,11 @@ const usingMotherDuck = Boolean(process.env.DUCKDB_DATABASE_URL);
 export async function getConnection(): Promise<DuckDBConnection> {
   const instance = await getInstance();
   const connection = await instance.connect();
+  // Third layer, matching the error message's own suggested remedy verbatim
+  // — some code paths (e.g. motherduck's lazy auth on first attach/query)
+  // may only pick up home_directory as a runtime SET, not an instance-create
+  // option.
+  await connection.run("SET home_directory='/tmp'");
   if (!usingMotherDuck) {
     await initSchema((sql) => connection.run(sql));
   }
