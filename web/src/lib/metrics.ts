@@ -669,6 +669,7 @@ export async function comradesMilestones(
 }
 
 export interface DailyPlanRow {
+  id: number;
   planned_date: string;
   day_of_week: string;
   session_type: string;
@@ -685,6 +686,7 @@ export async function dailyPlanForWeek(conn: DuckDBConnection, weekNumber: numbe
   return queryRows<DailyPlanRow>(
     conn,
     `SELECT
+        id,
         planned_date::VARCHAR AS planned_date,
         day_of_week,
         session_type,

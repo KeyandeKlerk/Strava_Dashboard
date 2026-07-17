@@ -10,6 +10,7 @@ import {
   upsertTrainingPlanWeek,
   upsertRaceEvent,
   upsertRaceAnalysis,
+  addDailySession,
 } from "./db/mutations";
 import * as metrics from "./metrics";
 
@@ -511,5 +512,33 @@ describe("weeklyEfficiencyFactor", () => {
     expect(rows[0].run_count).toBe(2);
     const expectedMean = (10.0 / 140.0 + 12.0 / 150.0) / 2;
     approx(rows[0].mean_ef, expectedMean, expectedMean * 0.01);
+  });
+});
+
+describe("dailyPlanForWeek", () => {
+  it("includes each session's id", async () => {
+    await upsertTrainingPlanWeek(conn, {
+      week_number: 1,
+      week_start_date: "2026-07-20",
+      phase: "Base",
+      planned_distance_km: 10,
+      planned_long_run_km: 10,
+      planned_sessions: 1,
+      is_deload: false,
+    });
+    const id = await addDailySession(conn, {
+      planned_date: "2026-07-20",
+      week_number: 1,
+      day_of_week: "Monday",
+      session_type: "easy_run",
+      planned_distance_km: 8,
+      intensity: "easy",
+      description: "Easy run",
+    });
+
+    const rows = await metrics.dailyPlanForWeek(conn, 1);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe(id);
   });
 });
