@@ -9,6 +9,14 @@ function statusIcon(row: DailyPlanRow, today: string): string {
   return row.planned_date >= today ? "⏳" : "❌";
 }
 
+// A session is "resolved" once there's nothing left to do about it — either
+// it's done, or its day has passed without it happening. Resolved sessions
+// sink below whatever's still upcoming this week, so the list leads with
+// what actually needs attention.
+function isResolved(row: DailyPlanRow, today: string): boolean {
+  return row.completed || row.planned_date < today;
+}
+
 export function DailySessionList({
   daily,
   today,
@@ -23,6 +31,7 @@ export function DailySessionList({
   const [editing, setEditing] = useState<DailyPlanRow | null>(null);
   const [adding, setAdding] = useState(false);
   const dates = weekDates(weekStartDate);
+  const ordered = [...daily].sort((a, b) => Number(isResolved(a, today)) - Number(isResolved(b, today)));
 
   return (
     <>
@@ -30,7 +39,7 @@ export function DailySessionList({
         <p className="text-sm text-neutral-500">No sessions loaded for this week.</p>
       ) : (
         <ul className="space-y-2">
-          {daily.map((row) => {
+          {ordered.map((row) => {
             const icon = SESSION_ICON[row.session_type] ?? "⬜";
             const effort = INTENSITY_LABEL[row.intensity] ?? row.intensity;
             const dayName = row.day_of_week.slice(0, 3);
