@@ -256,6 +256,19 @@ export async function addDailySession(conn: DuckDBConnection, s: DailySessionInp
   return row!.id;
 }
 
+export async function deleteDailySession(conn: DuckDBConnection, id: number): Promise<{ error?: string }> {
+  const row = await queryRow<{ completed: boolean }>(
+    conn,
+    "SELECT completed FROM training_plan_daily WHERE id = $id",
+    { id },
+  );
+  if (!row) return { error: "Session not found." };
+  if (row.completed) return { error: "Can't remove a completed session." };
+
+  await conn.run("DELETE FROM training_plan_daily WHERE id = $id", { id });
+  return {};
+}
+
 export interface PlanDayRow {
   id: number;
   planned_date: string;

@@ -1,7 +1,7 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestConnection } from "./testHelper";
-import { addDailySession, queryPlanDay } from "./mutations";
+import { addDailySession, deleteDailySession, queryPlanDay } from "./mutations";
 
 let conn: DuckDBConnection;
 
@@ -33,5 +33,27 @@ describe("addDailySession", () => {
     const rows = await queryPlanDay(conn, id1, id2);
     expect(rows).toHaveLength(2);
     expect(rows.map((r) => r.description).sort()).toEqual(["Easy spin on the bike", "Volleyball"]);
+  });
+});
+
+describe("deleteDailySession", () => {
+  it("removes a non-completed session", async () => {
+    const id = await addDailySession(conn, baseSession());
+    const result = await deleteDailySession(conn, id);
+
+    expect(result.error).toBeUndefined();
+    const rows = await queryPlanDay(conn, id);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("refuses to remove a completed session", async () => {
+    const id = await addDailySession(conn, baseSession());
+    await conn.run("UPDATE training_plan_daily SET completed = TRUE WHERE id = $id", { id });
+
+    const result = await deleteDailySession(conn, id);
+
+    expect(result.error).toBe("Can't remove a completed session.");
+    const rows = await queryPlanDay(conn, id);
+    expect(rows).toHaveLength(1);
   });
 });
