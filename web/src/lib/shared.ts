@@ -20,6 +20,7 @@ export const SESSION_ICON: Record<string, string> = {
   quality_run: "\u{1F7E1}",
   long_run: "\u{1F535}",
   hills: "\u{1F7E0}",
+  cross_training: "\u{1F6B4}",
   cricket: "\u{1F3CF}",
   race: "\u{1F3C6}",
 };
@@ -82,4 +83,25 @@ export function weekLabel(row: {
   const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "2-digit" });
   const deloadTag = row.is_deload ? " [DELOAD]" : "";
   return `Wk ${String(row.week_number).padStart(2, "0")}  ${fmt(start)}–${end.getDate()}  ·  ${row.phase}${deloadTag}  ·  ${row.days_done}/${row.total_days} done`;
+}
+
+export interface WeekDate {
+  date: string;
+  dayName: string;
+}
+
+export function weekDates(weekStartDate: string): WeekDate[] {
+  const [y, m, d] = weekStartDate.slice(0, 10).split("-").map(Number);
+  const start = new Date(y, m - 1, d);
+  return Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(start.getTime());
+    day.setDate(day.getDate() + i);
+    const yyyy = day.getFullYear();
+    const mm = String(day.getMonth() + 1).padStart(2, "0");
+    const dd = String(day.getDate()).padStart(2, "0");
+    return {
+      date: `${yyyy}-${mm}-${dd}`,
+      dayName: day.toLocaleDateString("en-US", { weekday: "long" }),
+    };
+  });
 }
