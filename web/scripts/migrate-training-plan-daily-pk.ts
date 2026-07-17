@@ -78,8 +78,15 @@ async function main() {
   }
 
   console.log("Swapping tables");
-  await conn.run("DROP TABLE md.training_plan_daily");
-  await conn.run("ALTER TABLE md.training_plan_daily_new RENAME TO training_plan_daily");
+  await conn.run("BEGIN TRANSACTION");
+  try {
+    await conn.run("DROP TABLE md.training_plan_daily");
+    await conn.run("ALTER TABLE md.training_plan_daily_new RENAME TO training_plan_daily");
+    await conn.run("COMMIT");
+  } catch (err) {
+    await conn.run("ROLLBACK");
+    throw err;
+  }
 
   conn.closeSync();
   console.log("\nMigration complete.");
