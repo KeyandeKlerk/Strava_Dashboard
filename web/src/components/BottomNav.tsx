@@ -22,7 +22,7 @@ export function BottomNav() {
             <li key={item.href} className="flex-1">
               <a
                 href={item.href}
-                className={`flex items-center justify-center py-3 text-xs font-medium ${
+                className={`flex items-center justify-center py-5 text-sm font-medium ${
                   active
                     ? "text-neutral-900 dark:text-neutral-100"
                     : "text-neutral-400 dark:text-neutral-500"

@@ -37,7 +37,7 @@ export function WeeklyDistanceChart({
         <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
         <Tooltip {...TOOLTIP_STYLE} labelFormatter={dateTooltipLabel} formatter={(v, name) => [`${Number(v).toFixed(1)} km`, name]} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
-        <Bar dataKey="planned_km" name="Planned" fill="rgba(128,128,128,0.3)" />
+        <Bar dataKey="planned_km" name="Planned" fill={SERIES.aqua} />
         <Bar dataKey="actual_km" name="Actual" fill={SERIES.blue} />
         <Line dataKey="rolling_4w_avg" name="4-Week Avg" stroke={SERIES.orange} strokeDasharray="4 2" dot={false} connectNulls />
       </ComposedChart>

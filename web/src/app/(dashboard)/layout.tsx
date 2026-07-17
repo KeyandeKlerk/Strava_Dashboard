@@ -24,7 +24,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <div className="mx-auto w-full max-w-3xl px-4 pt-2 text-right text-xs text-neutral-400">
         {lastSynced != null ? `Last synced ${formatLastSynced(lastSynced)}` : "Not synced yet"}
       </div>
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-20 pt-2">{children}</main>
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-24 pt-2">{children}</main>
       <BottomNav />
     </div>
   );
