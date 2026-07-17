@@ -233,20 +233,15 @@ export interface DailySessionInput {
   is_quality?: boolean;
 }
 
-export async function upsertDailySession(conn: DuckDBConnection, s: DailySessionInput): Promise<void> {
-  await conn.run(
+export async function addDailySession(conn: DuckDBConnection, s: DailySessionInput): Promise<number> {
+  const row = await queryRow<{ id: number }>(
+    conn,
     `INSERT INTO training_plan_daily (
       planned_date, week_number, day_of_week, session_type,
       planned_distance_km, intensity, description, is_quality
     ) VALUES ($planned_date, $week_number, $day_of_week, $session_type,
       $planned_distance_km, $intensity, $description, $is_quality)
-    ON CONFLICT (planned_date, session_type) DO UPDATE SET
-      week_number = excluded.week_number,
-      day_of_week = excluded.day_of_week,
-      planned_distance_km = excluded.planned_distance_km,
-      intensity = excluded.intensity,
-      description = excluded.description,
-      is_quality = excluded.is_quality`,
+    RETURNING id`,
     {
       planned_date: s.planned_date,
       week_number: s.week_number,
@@ -257,6 +252,26 @@ export async function upsertDailySession(conn: DuckDBConnection, s: DailySession
       description: s.description,
       is_quality: s.is_quality ?? false,
     },
+  );
+  return row!.id;
+}
+
+export interface PlanDayRow {
+  id: number;
+  planned_date: string;
+  day_of_week: string;
+  session_type: string;
+  completed: boolean;
+  description: string;
+}
+
+export async function queryPlanDay(conn: DuckDBConnection, ...ids: number[]): Promise<PlanDayRow[]> {
+  return queryRows<PlanDayRow>(
+    conn,
+    `SELECT id, planned_date::VARCHAR AS planned_date, day_of_week, session_type, completed, description
+     FROM training_plan_daily WHERE id IN (${ids.map((_, i) => `$id${i}`).join(", ")})
+     ORDER BY id`,
+    Object.fromEntries(ids.map((id, i) => [`id${i}`, id])),
   );
 }
 

@@ -50,7 +50,9 @@ export const SCHEMA_STATEMENTS: readonly string[] = [
     is_deload BOOLEAN DEFAULT FALSE,
     notes VARCHAR
   )`,
+  `CREATE SEQUENCE IF NOT EXISTS training_plan_daily_id_seq START 1`,
   `CREATE TABLE IF NOT EXISTS training_plan_daily (
+    id INTEGER PRIMARY KEY DEFAULT nextval('training_plan_daily_id_seq'),
     planned_date DATE,
     week_number INTEGER,
     day_of_week VARCHAR,
@@ -61,8 +63,7 @@ export const SCHEMA_STATEMENTS: readonly string[] = [
     is_quality BOOLEAN DEFAULT FALSE,
     completed BOOLEAN DEFAULT FALSE,
     completed_activity_id BIGINT,
-    completed_distance_km DOUBLE,
-    PRIMARY KEY (planned_date, session_type)
+    completed_distance_km DOUBLE
   )`,
   `CREATE TABLE IF NOT EXISTS sync_state (
     key VARCHAR PRIMARY KEY,

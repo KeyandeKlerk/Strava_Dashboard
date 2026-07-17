@@ -2,10 +2,10 @@
 import { revalidatePath, updateTag } from "next/cache";
 import { getConnection } from "@/lib/db/client";
 import {
+  addDailySession,
   clearTrainingPlan,
   correlateActivitiesToPlan,
   syncWeeklyFromDaily,
-  upsertDailySession,
 } from "@/lib/db/mutations";
 import { parseCsv } from "@/lib/csv";
 import { DASHBOARD_DATA_TAG } from "@/lib/pageData";
@@ -41,7 +41,7 @@ export async function importPlanCsv(_prev: ImportPlanState, formData: FormData):
   const conn = await getConnection();
   await clearTrainingPlan(conn);
   for (const row of rows) {
-    await upsertDailySession(conn, {
+    await addDailySession(conn, {
       planned_date: row.planned_date,
       week_number: Number(row.week_number),
       day_of_week: row.day_of_week,
