@@ -18,6 +18,11 @@ one — without re-uploading the whole CSV.
   training history and avoids orphaning `completed_activity_id` matches.
 - Available on **both** the Today tab (current week) and the Plan & History tab's week
   explorer (any week), via one shared component.
+- A day can hold **more than one session of the same type** (e.g. a volleyball session and a
+  separate cycling session, both categorized `cross_training`) — see Schema migration below.
+  This wasn't previously representable at all: `training_plan_daily`'s primary key was
+  `(planned_date, session_type)`, so a second same-type session on a day would silently
+  overwrite the first.
 
 ## Interaction model
 
@@ -30,16 +35,19 @@ about what's currently selected once a day holds multiple sessions.
   and distance. Below that, a row of 7 day buttons for the session's current week
   (Mon–Sun, computed from `week_start_date`, not from the sessions that happen to exist —
   so an empty day is still a valid move target). The button for the session's own current
-  day is disabled. A target day button is also disabled, with an inline reason (e.g. "Wed's
-  easy run is already done"), if it already holds a *completed* session of the same type.
+  day is disabled. Moving is a **swap** with whatever's on the target day if there's exactly
+  one existing session of the same type there; if that one session is *completed*, or if the
+  target day already holds *two or more* sessions of that type (ambiguous — which one would
+  it swap with?), the day button is disabled with an inline reason ("Wed's easy run is already
+  done" / "Thursday already has 2 easy runs — remove one first or pick a different day").
   Below the day row is a "Remove from plan" button. Cancel closes without changes.
 - **Add workout**: a "+ Add workout" row at the end of each week's session list opens the same
   sheet shape in create mode — day picker (that week's 7 days), session-type select (`rest`,
   `sc`, `easy_run`, `quality_run`, `long_run`, `hills`, `cross_training`, `cricket`, `race`),
   distance (km) number input, intensity select (`easy`, `moderate`, `hard`, `race`, `rest`),
-  description text input. If the chosen day/type already has a session, `addDailySessionAction`
-  overwrites it via the existing upsert semantics — unless that existing session is
-  `completed`, in which case it's blocked with the same inline error as a blocked move.
+  description text input. This always inserts a new row — with the surrogate `id` primary key
+  (see Schema migration below), a day can hold any number of sessions, including more than one
+  of the same type, so there's nothing to overwrite or block.
   `SESSION_ICON` (`src/lib/shared.ts`) is missing an entry for `cross_training` — it currently
   falls back to the generic ⬜ used for `rest`, which would make the two indistinguishable once
   `cross_training` is exposed as a real, pickable option here. Adding an icon for it is a small
@@ -48,36 +56,70 @@ about what's currently selected once a day holds multiple sessions.
   chevron) — "locked" is visible before you try to interact, not discovered as an error
   afterward.
 
+## Schema migration
+
+`training_plan_daily`'s primary key changes from `(planned_date, session_type)` to a
+surrogate `id INTEGER PRIMARY KEY DEFAULT nextval('training_plan_daily_id_seq')` — the same
+sequence-backed pattern already used for `race_events`/`training_blocks`. `(planned_date,
+session_type)` is no longer unique.
+
+Production runs on MotherDuck, where `initSchema` is deliberately skipped (per the existing
+comment in `db/client.ts` — running `CREATE TABLE IF NOT EXISTS` against a live MotherDuck
+table risks catalog write-write conflicts, and the schema there was set up by a one-time
+migration, not by the app). So editing `schema.ts` alone won't change the live table. This
+needs an actual migration script — following the existing `web/scripts/migrate-to-motherduck.ts`
+pattern — that:
+
+1. Creates `training_plan_daily_id_seq`.
+2. Creates a new table with the surrogate-`id` shape.
+3. Copies existing rows across, generating `id`s via `nextval(...)` as it goes.
+4. Drops the old `training_plan_daily`, renames the new table into place.
+
+This runs once against the live database. I'll write the script as part of implementation, but
+**running it against production is a separate, explicit step** — same as the deploy gating
+we've been doing all along, not something bundled silently into a commit.
+
+Separately, `schema.ts`'s `training_plan_daily` `CREATE TABLE` statement also needs updating to
+the surrogate-`id` shape — that's what backs local dev and the test suite's `:memory:` database
+(`initSchema` runs there, just not against MotherDuck), so it needs to match the migrated
+production shape.
+
 ## Data layer
 
-New mutations in `src/lib/db/mutations.ts`:
+New mutations in `src/lib/db/mutations.ts`, all keyed by the new `id` rather than
+`(planned_date, session_type)`:
 
-- **`moveDailySession(conn, { fromDate, sessionType, toDate })`**
+- **`moveDailySession(conn, { id, toDate })`**
+  - Looks up the source row by `id`; rejects if it's `completed`.
   - Recomputes `day_of_week` for `toDate`.
-  - If a session of the same `sessionType` already exists on `toDate`:
-    - If it's `completed` → throws (surfaced as the blocked-target error).
-    - Otherwise, swaps the two rows' dates atomically inside a transaction: move the source
-      row to a sentinel placeholder date, move the existing target row into the source's old
-      date, then move the sentinel row into `toDate`. This avoids a transient PK collision on
-      `(planned_date, session_type)` mid-swap.
-  - If there's no collision, it's a plain `UPDATE ... SET planned_date, day_of_week WHERE
-    planned_date = fromDate AND session_type = sessionType`.
-  - Guards server-side that the source row isn't `completed` (defense in depth — the UI
-    already prevents opening the sheet for one).
-  - Uses `BEGIN TRANSACTION` / `COMMIT` / `ROLLBACK`, matching the existing pattern in
-    `upsertHrZones`.
-- **`deleteDailySession(conn, { plannedDate, sessionType })`** — `DELETE FROM
-  training_plan_daily WHERE planned_date = ... AND session_type = ... AND NOT completed`.
-- **Add** reuses the existing `upsertDailySession` — no new mutation needed.
+  - Finds existing sessions on `toDate` with the same `session_type` (excluding the source
+    row itself):
+    - Exactly one, and it's not `completed` → swap: update the source row's `planned_date`/
+      `day_of_week` to the target's, and the target row's to the source's old values. Two
+      `UPDATE ... WHERE id = ...` calls inside `BEGIN TRANSACTION` / `COMMIT` / `ROLLBACK`
+      (matching the existing pattern in `upsertHrZones`) — no PK-collision risk with a
+      surrogate key, so no sentinel-date dance needed.
+    - Exactly one, but it's `completed`, or two-or-more exist → throws (surfaced as the
+      blocked-target error; the UI already disables that day button for the same reason).
+    - None → plain `UPDATE training_plan_daily SET planned_date, day_of_week WHERE id = $id`.
+- **`deleteDailySession(conn, { id })`** — `DELETE FROM training_plan_daily WHERE id = $id
+  AND NOT completed`.
+- **`addDailySession(conn, input)`** — plain `INSERT` (no `ON CONFLICT`; there's no longer a
+  uniqueness constraint to conflict with). Replaces the current `upsertDailySession`, which
+  is only otherwise used by CSV import (`clearTrainingPlan` already wipes the table first, so
+  switching that call to a plain insert too is behavior-preserving).
 - All three are followed by `syncWeeklyFromDaily(conn)` (refresh the week's rollup numbers)
   and `correlateActivitiesToPlan(conn)` (in case the new/moved slot now lines up with an
   already-logged activity), matching the existing CSV-import action's pattern.
+- `DailyPlanRow` (`src/lib/metrics.ts`) and `dailyPlanForWeek`'s query gain the `id` column —
+  the client needs it as both the React key and the mutation target now that
+  `(planned_date, session_type)` no longer uniquely identifies a row.
 
 **Server actions** — new `src/lib/planActions.ts` (`"use server"`), shared by both pages
 rather than duplicated per route:
 
-- `moveDailySessionAction(fromDate, sessionType, toDate)`
-- `deleteDailySessionAction(plannedDate, sessionType)`
+- `moveDailySessionAction(id, toDate)`
+- `deleteDailySessionAction(id)`
 - `addDailySessionAction(formData)`
 
 Each returns `{ error?: string }` (matching the existing `ImportPlanState` pattern) instead of
@@ -101,7 +143,8 @@ regardless of which page the edit happened on.
 
 The project's only existing test coverage is backend/data-layer (`metrics.test.ts`, in-memory
 DuckDB, `vitest` `node` environment — no component-rendering infrastructure exists). This adds
-equivalent unit tests for `moveDailySession` (plain move, swap-on-collision, blocked-when-
-target-completed) and `deleteDailySession` (blocked-when-completed) in the same style. The
-edit sheet's UI is verified manually by running the dev server — adding component-rendering
-infrastructure (jsdom + testing-library) solely for this feature would be disproportionate.
+equivalent unit tests, against the migrated schema, for `moveDailySession` (plain move,
+swap-with-one-existing, blocked-when-target-completed, blocked-when-target-has-two-or-more)
+and `deleteDailySession` (blocked-when-completed) in the same style. The edit sheet's UI is
+verified manually by running the dev server — adding component-rendering infrastructure
+(jsdom + testing-library) solely for this feature would be disproportionate.
