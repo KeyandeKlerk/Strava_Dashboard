@@ -34,11 +34,12 @@ export default async function TodayPage() {
           {current.run_days_done}/{current.run_days} runs done · {pct}% complete
         </p>
       </div>
-      {daily.length === 0 ? (
-        <p className="text-sm text-neutral-500">No daily sessions yet for this week.</p>
-      ) : (
-        <DailySessionList daily={daily} today={today} />
-      )}
+      <DailySessionList
+        daily={daily}
+        today={today}
+        weekStartDate={current.week_start_date}
+        weekNumber={current.week_number}
+      />
     </div>
   );
 }

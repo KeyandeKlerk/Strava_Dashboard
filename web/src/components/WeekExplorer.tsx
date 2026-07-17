@@ -44,7 +44,12 @@ export function WeekExplorer({
         </p>
       </div>
       <div className="mt-3">
-        <DailySessionList daily={dailyByWeek[selected] ?? []} today={today} />
+        <DailySessionList
+          daily={dailyByWeek[selected] ?? []}
+          today={today}
+          weekStartDate={row?.week_start_date ?? ""}
+          weekNumber={selected}
+        />
       </div>
     </div>
   );
