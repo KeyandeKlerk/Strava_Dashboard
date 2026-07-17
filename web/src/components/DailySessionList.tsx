@@ -1,4 +1,7 @@
-import { INTENSITY_LABEL, SESSION_ICON } from "@/lib/shared";
+"use client";
+import { useState } from "react";
+import { INTENSITY_LABEL, SESSION_ICON, weekDates } from "@/lib/shared";
+import { EditSessionSheet } from "@/components/EditSessionSheet";
 import type { DailyPlanRow } from "@/lib/metrics";
 
 function statusIcon(row: DailyPlanRow, today: string): string {
@@ -6,50 +9,97 @@ function statusIcon(row: DailyPlanRow, today: string): string {
   return row.planned_date >= today ? "⏳" : "❌";
 }
 
-export function DailySessionList({ daily, today }: { daily: DailyPlanRow[]; today: string }) {
-  if (daily.length === 0) {
-    return <p className="text-sm text-neutral-500">No sessions loaded for this week.</p>;
-  }
+export function DailySessionList({
+  daily,
+  today,
+  weekStartDate,
+  weekNumber,
+}: {
+  daily: DailyPlanRow[];
+  today: string;
+  weekStartDate: string;
+  weekNumber: number;
+}) {
+  const [editing, setEditing] = useState<DailyPlanRow | null>(null);
+  const [adding, setAdding] = useState(false);
+  const dates = weekDates(weekStartDate);
 
   return (
-    <ul className="space-y-2">
-      {daily.map((row) => {
-        const icon = SESSION_ICON[row.session_type] ?? "⬜";
-        const effort = INTENSITY_LABEL[row.intensity] ?? row.intensity;
-        const dayName = row.day_of_week.slice(0, 3);
-        const dateLabel = new Date(`${row.planned_date}T00:00:00`).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        });
-        return (
-          <li
-            key={`${row.planned_date}-${row.session_type}`}
-            className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-baseline gap-2">
-                <span aria-hidden="true">{statusIcon(row, today)}</span>
-                <span className="text-sm font-medium">
-                  {dayName} {dateLabel}
-                </span>
-              </div>
-              <div className="text-right text-sm">
-                <div>{row.planned_km && row.planned_km > 0 ? `${row.planned_km} km` : "—"}</div>
-                {row.actual_km != null && (
-                  <div className="text-neutral-500">{row.actual_km} km actual</div>
+    <>
+      {daily.length === 0 ? (
+        <p className="text-sm text-neutral-500">No sessions loaded for this week.</p>
+      ) : (
+        <ul className="space-y-2">
+          {daily.map((row) => {
+            const icon = SESSION_ICON[row.session_type] ?? "⬜";
+            const effort = INTENSITY_LABEL[row.intensity] ?? row.intensity;
+            const dayName = row.day_of_week.slice(0, 3);
+            const dateLabel = new Date(`${row.planned_date}T00:00:00`).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            });
+            const editable = !row.completed;
+            return (
+              <li
+                key={row.id}
+                onClick={editable ? () => setEditing(row) : undefined}
+                className={`rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800 ${
+                  editable ? "cursor-pointer" : ""
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-baseline gap-2">
+                    <span aria-hidden="true">{statusIcon(row, today)}</span>
+                    <span className="text-sm font-medium">
+                      {dayName} {dateLabel}
+                    </span>
+                  </div>
+                  <div className="text-right text-sm">
+                    <div>{row.planned_km && row.planned_km > 0 ? `${row.planned_km} km` : "—"}</div>
+                    {row.actual_km != null && (
+                      <div className="text-neutral-500">{row.actual_km} km actual</div>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-1 text-sm">
+                  {icon} {row.session_type.replace(/_/g, " ")}{" "}
+                  <span className="text-neutral-500">· {effort}</span>
+                </div>
+                {row.description && (
+                  <p className="mt-1 text-sm text-neutral-500">{row.description}</p>
                 )}
-              </div>
-            </div>
-            <div className="mt-1 text-sm">
-              {icon} {row.session_type.replace(/_/g, " ")}{" "}
-              <span className="text-neutral-500">· {effort}</span>
-            </div>
-            {row.description && (
-              <p className="mt-1 text-sm text-neutral-500">{row.description}</p>
-            )}
-          </li>
-        );
-      })}
-    </ul>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setAdding(true)}
+        className="mt-2 w-full rounded-md border border-dashed border-neutral-300 px-3 py-2 text-sm text-neutral-500 dark:border-neutral-700"
+      >
+        + Add workout
+      </button>
+
+      {editing && (
+        <EditSessionSheet
+          mode="edit"
+          session={editing}
+          daily={daily}
+          weekDates={dates}
+          onClose={() => setEditing(null)}
+        />
+      )}
+      {adding && (
+        <EditSessionSheet
+          mode="create"
+          weekNumber={weekNumber}
+          daily={daily}
+          weekDates={dates}
+          onClose={() => setAdding(false)}
+        />
+      )}
+    </>
   );
 }
