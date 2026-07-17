@@ -1,5 +1,6 @@
 import { getRacePrepPageData } from "@/lib/pageData";
 import { RACE_DATE, fmtPace } from "@/lib/shared";
+import { ChartCard } from "@/components/charts/ChartCard";
 import { ElevationProfileChart, WeeklyElevationChart } from "@/components/charts/RaceCharts";
 import { addRaceEvent } from "./actions";
 
@@ -99,10 +100,9 @@ export default async function RacePrepPage() {
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           {elevation.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium text-neutral-500">Weekly Elevation Gain (m)</h3>
+            <ChartCard title="Weekly Elevation Gain" subtitle="Total climbing per week, meters.">
               <WeeklyElevationChart data={elevation} />
-            </div>
+            </ChartCard>
           )}
           <div>
             <h3 className="text-sm font-medium text-neutral-500">Comrades Finish Time Bands</h3>
@@ -169,9 +169,9 @@ export default async function RacePrepPage() {
                 </tbody>
               </table>
             </div>
-            <div className="mt-3">
+            <ChartCard title="Comrades Elevation Profile" subtitle="Projected elevation along the race route, by kilometre.">
               <ElevationProfileChart data={elevationProfile} />
-            </div>
+            </ChartCard>
           </div>
         ) : (
           <p className="mt-4 text-sm text-neutral-500">

@@ -14,15 +14,17 @@ import {
   YAxis,
 } from "recharts";
 import type { AcwrRow, CtlAtlTsbRow, EfficiencyFactorRow, MonotonyRow, RampRateRow } from "@/lib/metrics";
+import { shortDate } from "@/lib/shared";
+import { CHART_MARGIN, Y_AXIS_WIDTH, dateTooltipLabel } from "./chartTheme";
 
 export function TsbChart({ data }: { data: CtlAtlTsbRow[] }) {
   return (
     <ResponsiveContainer width="100%" height={260}>
-      <ComposedChart data={data}>
+      <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="day" tick={{ fontSize: 10 }} minTickGap={30} />
-        <YAxis tick={{ fontSize: 10 }} />
-        <Tooltip />
+        <XAxis dataKey="day" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
+        <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
+        <Tooltip labelFormatter={dateTooltipLabel} />
         <Area dataKey="tsb" name="TSB (Form)" fill="#4CAF50" stroke="#4CAF50" fillOpacity={0.15} />
         <Line dataKey="ctl" name="CTL (Fitness)" stroke="#2196F3" dot={false} strokeWidth={2} />
         <Line dataKey="atl" name="ATL (Fatigue)" stroke="#f44336" dot={false} strokeWidth={2} />
@@ -34,11 +36,11 @@ export function TsbChart({ data }: { data: CtlAtlTsbRow[] }) {
 export function EfficiencyFactorChart({ data }: { data: EfficiencyFactorRow[] }) {
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <ScatterChart>
+      <ScatterChart margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="week_start" tick={{ fontSize: 10 }} minTickGap={30} />
-        <YAxis dataKey="mean_ef" tick={{ fontSize: 10 }} domain={["auto", "auto"]} />
-        <Tooltip />
+        <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
+        <YAxis dataKey="mean_ef" width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} domain={["auto", "auto"]} />
+        <Tooltip labelFormatter={dateTooltipLabel} />
         <Scatter data={data} dataKey="mean_ef" fill="#2196F3" />
       </ScatterChart>
     </ResponsiveContainer>
@@ -48,11 +50,11 @@ export function EfficiencyFactorChart({ data }: { data: EfficiencyFactorRow[] })
 export function AcwrChart({ data }: { data: AcwrRow[] }) {
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <ComposedChart data={data}>
+      <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="day" tick={{ fontSize: 10 }} minTickGap={30} />
-        <YAxis tick={{ fontSize: 10 }} domain={[0, "auto"]} />
-        <Tooltip />
+        <XAxis dataKey="day" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
+        <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} domain={[0, "auto"]} />
+        <Tooltip labelFormatter={dateTooltipLabel} />
         <ReferenceLine y={0.8} stroke="#4CAF50" strokeDasharray="4 4" />
         <ReferenceLine y={1.3} stroke="#f39c12" strokeDasharray="4 4" />
         <ReferenceLine y={1.5} stroke="#e74c3c" strokeDasharray="2 2" />
@@ -66,11 +68,11 @@ export function RampRateChart({ data }: { data: RampRateRow[] }) {
   const recent = data.filter((r) => r.ramp_pct != null).slice(0, 112);
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <ComposedChart data={recent}>
+      <ComposedChart data={recent} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="day" tick={{ fontSize: 10 }} minTickGap={30} />
-        <YAxis tick={{ fontSize: 10 }} />
-        <Tooltip />
+        <XAxis dataKey="day" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
+        <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
+        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)}%`, "Ramp"]} />
         <ReferenceLine y={10} stroke="#f39c12" strokeDasharray="4 4" />
         <ReferenceLine y={-10} stroke="#f39c12" strokeDasharray="4 4" />
         <Bar dataKey="ramp_pct" fill="#2ecc71" />
@@ -79,18 +81,31 @@ export function RampRateChart({ data }: { data: RampRateRow[] }) {
   );
 }
 
-export function MonotonyStrainChart({ data }: { data: MonotonyRow[] }) {
+export function MonotonyChart({ data }: { data: MonotonyRow[] }) {
   const recent = data.filter((r) => r.monotony != null).slice(0, 112);
   return (
-    <ResponsiveContainer width="100%" height={220}>
-      <ComposedChart data={recent}>
+    <ResponsiveContainer width="100%" height={200}>
+      <ComposedChart data={recent} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="day" tick={{ fontSize: 10 }} minTickGap={30} />
-        <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
-        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
-        <Tooltip />
-        <Bar yAxisId="right" dataKey="strain" fill="rgba(244,67,54,0.5)" name="Strain" />
-        <Line yAxisId="left" dataKey="monotony" stroke="#9C27B0" dot={false} strokeWidth={2} name="Monotony" />
+        <XAxis dataKey="day" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
+        <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
+        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v) => [Number(v).toFixed(2), "Monotony"]} />
+        <Line dataKey="monotony" stroke="#9C27B0" dot={false} strokeWidth={2} />
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function StrainChart({ data }: { data: MonotonyRow[] }) {
+  const recent = data.filter((r) => r.monotony != null).slice(0, 112);
+  return (
+    <ResponsiveContainer width="100%" height={200}>
+      <ComposedChart data={recent} margin={CHART_MARGIN}>
+        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+        <XAxis dataKey="day" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
+        <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
+        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v) => [Number(v).toFixed(0), "Strain"]} />
+        <Bar dataKey="strain" fill="rgba(244,67,54,0.5)" />
       </ComposedChart>
     </ResponsiveContainer>
   );

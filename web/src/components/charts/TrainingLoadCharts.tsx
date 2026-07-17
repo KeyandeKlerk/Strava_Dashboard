@@ -11,6 +11,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { shortDate, shortMonth } from "@/lib/shared";
+import { CHART_MARGIN, Y_AXIS_WIDTH, dateTooltipLabel, monthTooltipLabel } from "./chartTheme";
 
 const CATEGORY_COLOR: Record<string, string> = {
   running: "#2196F3",
@@ -26,11 +28,11 @@ export function WeeklyDistanceChart({
 }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <ComposedChart data={data}>
+      <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="week_start" tick={{ fontSize: 10 }} minTickGap={30} />
-        <YAxis tick={{ fontSize: 10 }} />
-        <Tooltip />
+        <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
+        <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
+        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v, name) => [`${Number(v).toFixed(1)} km`, name]} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
         <Bar dataKey="planned_km" name="Planned" fill="rgba(100,149,237,0.35)" />
         <Bar dataKey="actual_km" name="Actual" fill="rgba(50,168,82,0.85)" />
@@ -43,11 +45,11 @@ export function WeeklyDistanceChart({
 export function TimeOnFeetChart({ data }: { data: Array<{ week_start: string; run_time_h: number }> }) {
   return (
     <ResponsiveContainer width="100%" height={260}>
-      <ComposedChart data={data}>
+      <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="week_start" tick={{ fontSize: 10 }} minTickGap={30} />
-        <YAxis tick={{ fontSize: 10 }} />
-        <Tooltip />
+        <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
+        <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
+        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)} h`, "Time"]} />
         <ReferenceLine y={8} stroke="orange" strokeDasharray="2 2" />
         <Bar dataKey="run_time_h" fill="rgba(156,39,176,0.7)" />
       </ComposedChart>
@@ -55,22 +57,29 @@ export function TimeOnFeetChart({ data }: { data: Array<{ week_start: string; ru
   );
 }
 
-export function MonthlyVolumeChart({
-  data,
-}: {
-  data: Array<{ month_start: string; run_distance_km: number; run_time_h: number }>;
-}) {
+export function MonthlyDistanceChart({ data }: { data: Array<{ month_start: string; run_distance_km: number }> }) {
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <ComposedChart data={data}>
+    <ResponsiveContainer width="100%" height={220}>
+      <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="month_start" tick={{ fontSize: 10 }} />
-        <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
-        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
-        <Tooltip />
-        <Legend wrapperStyle={{ fontSize: 11 }} />
-        <Bar yAxisId="left" dataKey="run_distance_km" name="Distance (km)" fill="rgba(50,168,82,0.8)" />
-        <Line yAxisId="right" dataKey="run_time_h" name="Time (h)" stroke="purple" strokeWidth={2} dot={false} />
+        <XAxis dataKey="month_start" tickFormatter={shortMonth} tick={{ fontSize: 10 }} />
+        <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
+        <Tooltip labelFormatter={monthTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)} km`, "Distance"]} />
+        <Bar dataKey="run_distance_km" fill="rgba(50,168,82,0.8)" />
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function MonthlyTimeChart({ data }: { data: Array<{ month_start: string; run_time_h: number }> }) {
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <ComposedChart data={data} margin={CHART_MARGIN}>
+        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+        <XAxis dataKey="month_start" tickFormatter={shortMonth} tick={{ fontSize: 10 }} />
+        <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
+        <Tooltip labelFormatter={monthTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)} h`, "Time"]} />
+        <Line dataKey="run_time_h" stroke="purple" strokeWidth={2} dot={false} />
       </ComposedChart>
     </ResponsiveContainer>
   );
@@ -79,11 +88,11 @@ export function MonthlyVolumeChart({
 export function LongRunProgressionChart({ data, raceDistanceKm }: { data: Array<{ week_start: string; longest_run_km: number }>; raceDistanceKm: number }) {
   return (
     <ResponsiveContainer width="100%" height={240}>
-      <ComposedChart data={data}>
+      <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="week_start" tick={{ fontSize: 10 }} minTickGap={30} />
-        <YAxis tick={{ fontSize: 10 }} />
-        <Tooltip />
+        <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
+        <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
+        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)} km`, "Longest run"]} />
         <ReferenceLine y={raceDistanceKm * 0.5} stroke="orange" strokeDasharray="2 2" />
         <ReferenceLine y={raceDistanceKm * 0.67} stroke="#e74c3c" strokeDasharray="2 2" />
         <Bar dataKey="longest_run_km" fill="rgba(33,150,243,0.7)" />
@@ -99,11 +108,11 @@ export function CategoryLoadChart({
 }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <ComposedChart data={data}>
+      <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="week_start" tick={{ fontSize: 10 }} minTickGap={30} />
-        <YAxis tick={{ fontSize: 10 }} />
-        <Tooltip />
+        <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
+        <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
+        <Tooltip labelFormatter={dateTooltipLabel} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
         <Bar dataKey="running_load" name="Running" stackId="load" fill={CATEGORY_COLOR.running} />
         <Bar dataKey="volleyball_load" name="Volleyball" stackId="load" fill={CATEGORY_COLOR.volleyball} />

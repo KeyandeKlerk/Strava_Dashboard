@@ -15,6 +15,8 @@ import {
   YAxis,
   ZAxis,
 } from "recharts";
+import { shortDate } from "@/lib/shared";
+import { CHART_MARGIN, Y_AXIS_WIDTH, dateTooltipLabel } from "./chartTheme";
 
 const ZONE_COLOR: Record<string, string> = {
   z1_min: "#4fc3f7",
@@ -31,11 +33,11 @@ export function ZoneTimeChart({
 }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <ComposedChart data={data}>
+      <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="week_start" tick={{ fontSize: 10 }} minTickGap={30} />
-        <YAxis tick={{ fontSize: 10 }} />
-        <Tooltip />
+        <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
+        <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
+        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v, name) => [`${Number(v).toFixed(0)} min`, name]} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
         {Object.entries(ZONE_COLOR).map(([key, color]) => (
           <Bar key={key} dataKey={key} name={key.replace("_min", "").toUpperCase()} stackId="zones" fill={color} />
@@ -48,11 +50,11 @@ export function ZoneTimeChart({
 export function EasyPctChart({ data }: { data: Array<{ week_start: string; easy_pct: number | null }> }) {
   return (
     <ResponsiveContainer width="100%" height={180}>
-      <ComposedChart data={data.filter((d) => d.easy_pct != null)}>
+      <ComposedChart data={data.filter((d) => d.easy_pct != null)} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="week_start" tick={{ fontSize: 10 }} minTickGap={30} />
-        <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} />
-        <Tooltip />
+        <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
+        <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} domain={[0, 100]} />
+        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(0)}%`, "Easy"]} />
         <ReferenceLine y={80} stroke="green" strokeDasharray="4 2" />
         <Line dataKey="easy_pct" stroke="#66bb6a" dot={false} strokeWidth={2} />
       </ComposedChart>
@@ -63,32 +65,37 @@ export function EasyPctChart({ data }: { data: Array<{ week_start: string; easy_
 export function PaceTrendChart({ data }: { data: Array<{ activity_date: string; pace_min_per_km: number | null }> }) {
   return (
     <ResponsiveContainer width="100%" height={260}>
-      <ScatterChart>
+      <ScatterChart margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="activity_date" tick={{ fontSize: 10 }} minTickGap={30} />
-        <YAxis dataKey="pace_min_per_km" tick={{ fontSize: 10 }} reversed domain={["auto", "auto"]} />
-        <Tooltip />
+        <XAxis dataKey="activity_date" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
+        <YAxis dataKey="pace_min_per_km" width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} reversed domain={["auto", "auto"]} />
+        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(2)} min/km`, "Pace"]} />
         <Scatter data={data.filter((d) => d.pace_min_per_km != null)} dataKey="pace_min_per_km" fill="#2196F3" />
       </ScatterChart>
     </ResponsiveContainer>
   );
 }
 
+// Shared by DecouplingChart and QualityScoreChart's semantic (non-series)
+// coloring, and by their pages' ChartCard `legend` prop — keep these in sync
+// with each other so the legend swatches always match the mark colors.
+export const SEMANTIC_COLOR = { good: "#2ecc71", borderline: "#f39c12", bad: "#e74c3c" };
+
 function decouplingColor(v: number): string {
-  if (v <= 0) return "#2ecc71";
-  if (v >= 5) return "#e74c3c";
-  return "#f39c12";
+  if (v <= 0) return SEMANTIC_COLOR.good;
+  if (v >= 5) return SEMANTIC_COLOR.bad;
+  return SEMANTIC_COLOR.borderline;
 }
 
 export function DecouplingChart({ data }: { data: Array<{ activity_date: string; decoupling_pct: number | null }> }) {
   const recent = data.filter((d) => d.decoupling_pct != null).slice(-20);
   return (
     <ResponsiveContainer width="100%" height={240}>
-      <ComposedChart data={recent}>
+      <ComposedChart data={recent} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="activity_date" tick={{ fontSize: 10 }} minTickGap={30} />
-        <YAxis tick={{ fontSize: 10 }} />
-        <Tooltip />
+        <XAxis dataKey="activity_date" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
+        <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
+        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)}%`, "Decoupling"]} />
         <ReferenceLine y={5} stroke="#e74c3c" strokeDasharray="4 2" />
         <Bar dataKey="decoupling_pct">
           {recent.map((d, i) => (
@@ -103,15 +110,18 @@ export function DecouplingChart({ data }: { data: Array<{ activity_date: string;
 export function QualityScoreChart({ data }: { data: Array<{ activity_date: string; quality_score: number; distance_km: number }> }) {
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <ScatterChart>
+      <ScatterChart margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="activity_date" tick={{ fontSize: 10 }} minTickGap={30} />
-        <YAxis dataKey="quality_score" tick={{ fontSize: 10 }} domain={[0, 100]} />
+        <XAxis dataKey="activity_date" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
+        <YAxis dataKey="quality_score" width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} domain={[0, 100]} />
         <ZAxis dataKey="distance_km" range={[40, 200]} />
-        <Tooltip />
+        <Tooltip labelFormatter={dateTooltipLabel} />
         <Scatter data={data}>
           {data.map((d, i) => (
-            <Cell key={i} fill={d.quality_score >= 70 ? "#2ecc71" : d.quality_score >= 40 ? "#f39c12" : "#e74c3c"} />
+            <Cell
+              key={i}
+              fill={d.quality_score >= 70 ? SEMANTIC_COLOR.good : d.quality_score >= 40 ? SEMANTIC_COLOR.borderline : SEMANTIC_COLOR.bad}
+            />
           ))}
         </Scatter>
       </ScatterChart>

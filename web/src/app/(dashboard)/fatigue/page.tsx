@@ -1,11 +1,13 @@
 import { getFatiguePageData } from "@/lib/pageData";
 import { flag } from "@/lib/shared";
 import { StatCard } from "@/components/StatCard";
+import { ChartCard } from "@/components/charts/ChartCard";
 import {
   AcwrChart,
   EfficiencyFactorChart,
-  MonotonyStrainChart,
+  MonotonyChart,
   RampRateChart,
+  StrainChart,
   TsbChart,
 } from "@/components/charts/FatigueCharts";
 
@@ -88,16 +90,16 @@ export default async function FatiguePage() {
           />
         </div>
         {tsb.length > 0 ? (
-          <div className="mt-3">
+          <ChartCard title="Fitness, Fatigue & Form" subtitle="CTL (fitness) and ATL (fatigue) build over time; TSB (form) is the gap between them — the target is +5 to +15 near race day.">
             <TsbChart data={tsb} />
-          </div>
+          </ChartCard>
         ) : (
           <p className="mt-2 text-sm text-neutral-500">No training load data yet. Run sync to populate fitness history.</p>
         )}
         {ef.length > 0 && (
-          <div className="mt-3">
+          <ChartCard title="Efficiency Factor" subtitle="Weekly mean speed ÷ heart rate. A rising trend means more speed for the same effort — better aerobic fitness.">
             <EfficiencyFactorChart data={ef} />
-          </div>
+          </ChartCard>
         )}
       </div>
 
@@ -110,19 +112,24 @@ export default async function FatiguePage() {
           <StatCard label="Strain" value={latestStrain != null ? latestStrain.toFixed(0) : "—"} caption="Vs. trailing 4-week average" flag={strainFlagColor} />
         </div>
         {acwr.length > 0 && (
-          <div className="mt-3">
+          <ChartCard title="Acute:Chronic Workload Ratio" subtitle="7-day load ÷ 28-day load. Green band (0.8–1.3) is the safe zone; above 1.5 is high injury risk.">
             <AcwrChart data={acwrSorted} />
-          </div>
+          </ChartCard>
         )}
         {ramp.length > 0 && (
-          <div className="mt-3">
+          <ChartCard title="Weekly Ramp Rate" subtitle="Week-over-week change in training load, %. Dashed lines mark the recommended ±10% guardrail.">
             <RampRateChart data={rampSorted} />
-          </div>
+          </ChartCard>
         )}
         {mono.length > 0 && (
-          <div className="mt-3">
-            <MonotonyStrainChart data={monoSorted} />
-          </div>
+          <>
+            <ChartCard title="Monotony" subtitle="How repetitive day-to-day training has been. Above 2.0 = too little variation between hard and easy days.">
+              <MonotonyChart data={monoSorted} />
+            </ChartCard>
+            <ChartCard title="Strain" subtitle="Weekly load × monotony — a combined injury-risk signal. Compared against your trailing 4-week average above.">
+              <StrainChart data={monoSorted} />
+            </ChartCard>
+          </>
         )}
       </div>
 

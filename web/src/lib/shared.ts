@@ -40,6 +40,19 @@ export function fmtPace(minPerKm: number | null | undefined): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+// Chart axis tick formatters. Built from the Y/M/D components directly
+// (rather than `new Date(iso)`, which parses a bare date as UTC midnight and
+// can roll back a day once formatted in a negative-UTC-offset timezone).
+export function shortDate(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+export function shortMonth(iso: string): string {
+  const [y, m] = iso.slice(0, 7).split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+}
+
 export type Flag = "green" | "yellow" | "red" | "gray";
 
 export function flag(value: number | null | undefined, low: number, high: number): Flag {

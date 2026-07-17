@@ -1,9 +1,11 @@
 import { getTrainingLoadPageData } from "@/lib/pageData";
 import { RACE_DISTANCE_KM } from "@/lib/shared";
+import { ChartCard } from "@/components/charts/ChartCard";
 import {
   CategoryLoadChart,
   LongRunProgressionChart,
-  MonthlyVolumeChart,
+  MonthlyDistanceChart,
+  MonthlyTimeChart,
   TimeOnFeetChart,
   WeeklyDistanceChart,
 } from "@/components/charts/TrainingLoadCharts";
@@ -21,16 +23,21 @@ export default async function TrainingLoadPage() {
           <p className="mt-2 text-sm text-neutral-500">No activity data yet. Run sync first.</p>
         ) : (
           <>
-            <div className="mt-3">
+            <ChartCard title="Weekly Distance" subtitle="Planned vs. actual running distance, km. Orange line is the 4-week rolling average.">
               <WeeklyDistanceChart data={distanceData} />
-            </div>
-            <div className="mt-3">
+            </ChartCard>
+            <ChartCard title="Time on Feet" subtitle="Total running time per week, hours. Dashed line marks the 8h/week reference.">
               <TimeOnFeetChart data={timeData} />
-            </div>
+            </ChartCard>
             {monthlySorted.length > 0 && (
-              <div className="mt-3">
-                <MonthlyVolumeChart data={monthlySorted} />
-              </div>
+              <>
+                <ChartCard title="Monthly Distance" subtitle="Total running distance per month, km.">
+                  <MonthlyDistanceChart data={monthlySorted} />
+                </ChartCard>
+                <ChartCard title="Monthly Time" subtitle="Total running time per month, hours.">
+                  <MonthlyTimeChart data={monthlySorted} />
+                </ChartCard>
+              </>
             )}
           </>
         )}
@@ -39,9 +46,9 @@ export default async function TrainingLoadPage() {
       {longRunData.length > 0 && (
         <div>
           <h2 className="text-base font-semibold">Long Run Progression</h2>
-          <div className="mt-2">
+          <ChartCard title="Longest Run per Week" subtitle="Distance, km. Lines mark 50% and 67% of race distance — common long-run benchmarks.">
             <LongRunProgressionChart data={longRunData} raceDistanceKm={RACE_DISTANCE_KM} />
-          </div>
+          </ChartCard>
         </div>
       )}
 
@@ -50,9 +57,9 @@ export default async function TrainingLoadPage() {
         {categorySorted.length === 0 ? (
           <p className="mt-2 text-sm text-neutral-500">No activity data yet.</p>
         ) : (
-          <div className="mt-2">
+          <ChartCard title="Weekly Load by Activity Type" subtitle="Stacked training load per week, by sport.">
             <CategoryLoadChart data={categorySorted} />
-          </div>
+          </ChartCard>
         )}
       </div>
     </div>
