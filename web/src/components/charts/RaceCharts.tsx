@@ -1,7 +1,7 @@
 "use client";
 import { Area, Bar, CartesianGrid, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { shortDate } from "@/lib/shared";
-import { CHART_MARGIN, Y_AXIS_WIDTH, dateTooltipLabel } from "./chartTheme";
+import { CHART_MARGIN, SERIES, TOOLTIP_STYLE, Y_AXIS_WIDTH, dateTooltipLabel } from "./chartTheme";
 
 export function WeeklyElevationChart({ data }: { data: Array<{ week_start: string; weekly_gain_m: number }> }) {
   return (
@@ -10,8 +10,8 @@ export function WeeklyElevationChart({ data }: { data: Array<{ week_start: strin
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
         <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
-        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(0)} m`, "Elevation gain"]} />
-        <Bar dataKey="weekly_gain_m" fill="rgba(121,85,72,0.75)" />
+        <Tooltip {...TOOLTIP_STYLE} labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(0)} m`, "Elevation gain"]} />
+        <Bar dataKey="weekly_gain_m" fill={SERIES.blue} />
       </ComposedChart>
     </ResponsiveContainer>
   );
@@ -24,8 +24,8 @@ export function ElevationProfileChart({ data }: { data: Array<{ checkpoint: stri
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="km" tick={{ fontSize: 10 }} type="number" domain={[0, "dataMax"]} unit=" km" />
         <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
-        <Tooltip labelFormatter={(v) => `km ${v}`} formatter={(v) => [`${Number(v).toFixed(0)} m`, "Elevation"]} />
-        <Area dataKey="elevation_m" fill="rgba(121,85,72,0.2)" stroke="rgba(121,85,72,0.8)" />
+        <Tooltip {...TOOLTIP_STYLE} labelFormatter={(v) => `km ${v}`} formatter={(v) => [`${Number(v).toFixed(0)} m`, "Elevation"]} />
+        <Area dataKey="elevation_m" fill={SERIES.blue} fillOpacity={0.2} stroke={SERIES.blue} />
       </ComposedChart>
     </ResponsiveContainer>
   );

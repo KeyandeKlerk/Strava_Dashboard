@@ -16,14 +16,17 @@ import {
   ZAxis,
 } from "recharts";
 import { shortDate } from "@/lib/shared";
-import { CHART_MARGIN, Y_AXIS_WIDTH, dateTooltipLabel } from "./chartTheme";
+import { CHART_MARGIN, SEQUENTIAL_BLUE, SERIES, STATUS, TOOLTIP_STYLE, Y_AXIS_WIDTH, dateTooltipLabel } from "./chartTheme";
 
+// Z1 (easiest) -> Z5 (hardest) is an ordered magnitude, not arbitrary
+// identity, so it takes one sequential hue with monotone lightness steps
+// rather than distinct categorical colors.
 const ZONE_COLOR: Record<string, string> = {
-  z1_min: "#4fc3f7",
-  z2_min: "#66bb6a",
-  z3_min: "#ffa726",
-  z4_min: "#ef5350",
-  z5_min: "#ab47bc",
+  z1_min: SEQUENTIAL_BLUE[0],
+  z2_min: SEQUENTIAL_BLUE[1],
+  z3_min: SEQUENTIAL_BLUE[2],
+  z4_min: SEQUENTIAL_BLUE[3],
+  z5_min: SEQUENTIAL_BLUE[4],
 };
 
 export function ZoneTimeChart({
@@ -37,7 +40,7 @@ export function ZoneTimeChart({
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
         <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
-        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v, name) => [`${Number(v).toFixed(0)} min`, name]} />
+        <Tooltip {...TOOLTIP_STYLE} labelFormatter={dateTooltipLabel} formatter={(v, name) => [`${Number(v).toFixed(0)} min`, name]} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
         {Object.entries(ZONE_COLOR).map(([key, color]) => (
           <Bar key={key} dataKey={key} name={key.replace("_min", "").toUpperCase()} stackId="zones" fill={color} />
@@ -54,9 +57,9 @@ export function EasyPctChart({ data }: { data: Array<{ week_start: string; easy_
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
         <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} domain={[0, 100]} />
-        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(0)}%`, "Easy"]} />
-        <ReferenceLine y={80} stroke="green" strokeDasharray="4 2" />
-        <Line dataKey="easy_pct" stroke="#66bb6a" dot={false} strokeWidth={2} />
+        <Tooltip {...TOOLTIP_STYLE} labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(0)}%`, "Easy"]} />
+        <ReferenceLine y={80} stroke={STATUS.good} strokeDasharray="4 2" />
+        <Line dataKey="easy_pct" stroke={SERIES.blue} dot={false} strokeWidth={2} />
       </ComposedChart>
     </ResponsiveContainer>
   );
@@ -69,8 +72,8 @@ export function PaceTrendChart({ data }: { data: Array<{ activity_date: string; 
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="activity_date" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
         <YAxis dataKey="pace_min_per_km" width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} reversed domain={["auto", "auto"]} />
-        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(2)} min/km`, "Pace"]} />
-        <Scatter data={data.filter((d) => d.pace_min_per_km != null)} dataKey="pace_min_per_km" fill="#2196F3" />
+        <Tooltip {...TOOLTIP_STYLE} labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(2)} min/km`, "Pace"]} />
+        <Scatter data={data.filter((d) => d.pace_min_per_km != null)} dataKey="pace_min_per_km" fill={SERIES.blue} />
       </ScatterChart>
     </ResponsiveContainer>
   );
@@ -78,8 +81,10 @@ export function PaceTrendChart({ data }: { data: Array<{ activity_date: string; 
 
 // Shared by DecouplingChart and QualityScoreChart's semantic (non-series)
 // coloring, and by their pages' ChartCard `legend` prop — keep these in sync
-// with each other so the legend swatches always match the mark colors.
-export const SEMANTIC_COLOR = { good: "#2ecc71", borderline: "#f39c12", bad: "#e74c3c" };
+// with each other so the legend swatches always match the mark colors. These
+// are genuine status encodings (good/borderline/bad), so they wear the fixed
+// status palette, not a categorical series slot.
+export const SEMANTIC_COLOR = { good: STATUS.good, borderline: STATUS.warning, bad: STATUS.critical };
 
 function decouplingColor(v: number): string {
   if (v <= 0) return SEMANTIC_COLOR.good;
@@ -95,8 +100,8 @@ export function DecouplingChart({ data }: { data: Array<{ activity_date: string;
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="activity_date" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
         <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
-        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)}%`, "Decoupling"]} />
-        <ReferenceLine y={5} stroke="#e74c3c" strokeDasharray="4 2" />
+        <Tooltip {...TOOLTIP_STYLE} labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)}%`, "Decoupling"]} />
+        <ReferenceLine y={5} stroke={STATUS.critical} strokeDasharray="4 2" />
         <Bar dataKey="decoupling_pct">
           {recent.map((d, i) => (
             <Cell key={i} fill={decouplingColor(d.decoupling_pct ?? 0)} />
@@ -115,7 +120,7 @@ export function QualityScoreChart({ data }: { data: Array<{ activity_date: strin
         <XAxis dataKey="activity_date" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
         <YAxis dataKey="quality_score" width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} domain={[0, 100]} />
         <ZAxis dataKey="distance_km" range={[40, 200]} />
-        <Tooltip labelFormatter={dateTooltipLabel} />
+        <Tooltip {...TOOLTIP_STYLE} labelFormatter={dateTooltipLabel} />
         <Scatter data={data}>
           {data.map((d, i) => (
             <Cell

@@ -2,10 +2,9 @@
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "@/lib/nav";
 
-// Plain <a> tags rather than next/link's <Link>: client-side transitions
-// fetch an RSC payload, which has no offline fallback. A full navigation's
-// plain HTML GET is what the service worker's CacheFirst rule (src/app/sw.ts)
-// can actually serve from the precached dashboard-pages cache when offline.
+// Plain <a> tags rather than next/link's <Link>: a full navigation's plain
+// HTML GET works the same whether or not a service worker is active, unlike
+// client-side transitions which fetch an RSC payload.
 
 export function BottomNav() {
   const pathname = usePathname();
@@ -23,16 +22,13 @@ export function BottomNav() {
             <li key={item.href} className="flex-1">
               <a
                 href={item.href}
-                className={`flex flex-col items-center gap-0.5 py-2 text-xs ${
+                className={`flex items-center justify-center py-3 text-xs font-medium ${
                   active
                     ? "text-neutral-900 dark:text-neutral-100"
                     : "text-neutral-400 dark:text-neutral-500"
                 }`}
                 aria-current={active ? "page" : undefined}
               >
-                <span className="text-lg leading-none" aria-hidden="true">
-                  {item.icon}
-                </span>
                 {item.label}
               </a>
             </li>

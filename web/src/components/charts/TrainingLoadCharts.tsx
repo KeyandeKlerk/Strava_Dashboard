@@ -12,13 +12,16 @@ import {
   YAxis,
 } from "recharts";
 import { shortDate, shortMonth } from "@/lib/shared";
-import { CHART_MARGIN, Y_AXIS_WIDTH, dateTooltipLabel, monthTooltipLabel } from "./chartTheme";
+import { CHART_MARGIN, SERIES, STATUS, TOOLTIP_STYLE, Y_AXIS_WIDTH, dateTooltipLabel, monthTooltipLabel } from "./chartTheme";
 
+// Four distinct activity types stacked in one chart — true categorical
+// identity, so each gets its own palette slot (1-4, the validated
+// all-pairs-safe subset for a 4-series stack).
 const CATEGORY_COLOR: Record<string, string> = {
-  running: "#2196F3",
-  volleyball: "#FF9800",
-  cricket: "#4CAF50",
-  gym: "#9C27B0",
+  running: SERIES.blue,
+  volleyball: SERIES.green,
+  cricket: SERIES.magenta,
+  gym: SERIES.yellow,
 };
 
 export function WeeklyDistanceChart({
@@ -32,11 +35,11 @@ export function WeeklyDistanceChart({
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
         <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
-        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v, name) => [`${Number(v).toFixed(1)} km`, name]} />
+        <Tooltip {...TOOLTIP_STYLE} labelFormatter={dateTooltipLabel} formatter={(v, name) => [`${Number(v).toFixed(1)} km`, name]} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
-        <Bar dataKey="planned_km" name="Planned" fill="rgba(100,149,237,0.35)" />
-        <Bar dataKey="actual_km" name="Actual" fill="rgba(50,168,82,0.85)" />
-        <Line dataKey="rolling_4w_avg" name="4-Week Avg" stroke="orange" strokeDasharray="4 2" dot={false} connectNulls />
+        <Bar dataKey="planned_km" name="Planned" fill="rgba(128,128,128,0.3)" />
+        <Bar dataKey="actual_km" name="Actual" fill={SERIES.blue} />
+        <Line dataKey="rolling_4w_avg" name="4-Week Avg" stroke={SERIES.orange} strokeDasharray="4 2" dot={false} connectNulls />
       </ComposedChart>
     </ResponsiveContainer>
   );
@@ -49,9 +52,9 @@ export function TimeOnFeetChart({ data }: { data: Array<{ week_start: string; ru
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
         <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
-        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)} h`, "Time"]} />
-        <ReferenceLine y={8} stroke="orange" strokeDasharray="2 2" />
-        <Bar dataKey="run_time_h" fill="rgba(156,39,176,0.7)" />
+        <Tooltip {...TOOLTIP_STYLE} labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)} h`, "Time"]} />
+        <ReferenceLine y={8} stroke={STATUS.warning} strokeDasharray="2 2" />
+        <Bar dataKey="run_time_h" fill={SERIES.blue} />
       </ComposedChart>
     </ResponsiveContainer>
   );
@@ -64,8 +67,8 @@ export function MonthlyDistanceChart({ data }: { data: Array<{ month_start: stri
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="month_start" tickFormatter={shortMonth} tick={{ fontSize: 10 }} />
         <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
-        <Tooltip labelFormatter={monthTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)} km`, "Distance"]} />
-        <Bar dataKey="run_distance_km" fill="rgba(50,168,82,0.8)" />
+        <Tooltip {...TOOLTIP_STYLE} labelFormatter={monthTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)} km`, "Distance"]} />
+        <Bar dataKey="run_distance_km" fill={SERIES.blue} />
       </ComposedChart>
     </ResponsiveContainer>
   );
@@ -78,8 +81,8 @@ export function MonthlyTimeChart({ data }: { data: Array<{ month_start: string; 
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="month_start" tickFormatter={shortMonth} tick={{ fontSize: 10 }} />
         <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
-        <Tooltip labelFormatter={monthTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)} h`, "Time"]} />
-        <Line dataKey="run_time_h" stroke="purple" strokeWidth={2} dot={false} />
+        <Tooltip {...TOOLTIP_STYLE} labelFormatter={monthTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)} h`, "Time"]} />
+        <Line dataKey="run_time_h" stroke={SERIES.blue} strokeWidth={2} dot={false} />
       </ComposedChart>
     </ResponsiveContainer>
   );
@@ -92,10 +95,10 @@ export function LongRunProgressionChart({ data, raceDistanceKm }: { data: Array<
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
         <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
-        <Tooltip labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)} km`, "Longest run"]} />
-        <ReferenceLine y={raceDistanceKm * 0.5} stroke="orange" strokeDasharray="2 2" />
-        <ReferenceLine y={raceDistanceKm * 0.67} stroke="#e74c3c" strokeDasharray="2 2" />
-        <Bar dataKey="longest_run_km" fill="rgba(33,150,243,0.7)" />
+        <Tooltip {...TOOLTIP_STYLE} labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)} km`, "Longest run"]} />
+        <ReferenceLine y={raceDistanceKm * 0.5} stroke={STATUS.warning} strokeDasharray="2 2" />
+        <ReferenceLine y={raceDistanceKm * 0.67} stroke={STATUS.critical} strokeDasharray="2 2" />
+        <Bar dataKey="longest_run_km" fill={SERIES.blue} />
       </ComposedChart>
     </ResponsiveContainer>
   );
@@ -112,7 +115,7 @@ export function CategoryLoadChart({
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
         <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
-        <Tooltip labelFormatter={dateTooltipLabel} />
+        <Tooltip {...TOOLTIP_STYLE} labelFormatter={dateTooltipLabel} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
         <Bar dataKey="running_load" name="Running" stackId="load" fill={CATEGORY_COLOR.running} />
         <Bar dataKey="volleyball_load" name="Volleyball" stackId="load" fill={CATEGORY_COLOR.volleyball} />

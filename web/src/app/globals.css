@@ -19,6 +19,49 @@
   }
 }
 
+/*
+ * Chart palette — a validated 8-hue categorical set (fixed order, never
+ * cycled) plus a 5-step sequential blue ramp and a fixed status scale.
+ * Light/dark values are the same documented palette's dark-surface steps,
+ * not a separate palette — see dataviz skill references/palette.md. Status
+ * colors are mode-invariant (contrast against each surface differs, but the
+ * hex is the same) and never reused for series identity.
+ */
+:root {
+  --chart-blue: #2a78d6;
+  --chart-green: #008300;
+  --chart-magenta: #e87ba4;
+  --chart-yellow: #eda100;
+  --chart-aqua: #1baf7a;
+  --chart-orange: #eb6834;
+  --chart-violet: #4a3aa7;
+  --chart-red: #e34948;
+
+  --chart-blue-100: #cde2fb;
+  --chart-blue-250: #86b6ef;
+  --chart-blue-400: #3987e5;
+  --chart-blue-550: #1c5cab;
+  --chart-blue-700: #0d366b;
+
+  --chart-status-good: #0ca30c;
+  --chart-status-warning: #fab219;
+  --chart-status-serious: #ec835a;
+  --chart-status-critical: #d03b3b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --chart-blue: #3987e5;
+    --chart-green: #008300;
+    --chart-magenta: #d55181;
+    --chart-yellow: #c98500;
+    --chart-aqua: #199e70;
+    --chart-orange: #d95926;
+    --chart-violet: #9085e9;
+    --chart-red: #e66767;
+  }
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
