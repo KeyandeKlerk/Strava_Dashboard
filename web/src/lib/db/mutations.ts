@@ -472,3 +472,58 @@ export async function getAllRaceEvents<T = Record<string, unknown>>(conn: DuckDB
      ORDER BY race_date`,
   );
 }
+
+export async function moveDailySession(conn: DuckDBConnection, id: number, toDate: string): Promise<{ error?: string }> {
+  const source = await queryRow<{
+    id: number;
+    session_type: string;
+    completed: boolean;
+    planned_date: string;
+    day_of_week: string;
+  }>(
+    conn,
+    `SELECT id, session_type, completed, planned_date::VARCHAR AS planned_date, day_of_week
+     FROM training_plan_daily WHERE id = $id`,
+    { id },
+  );
+  if (!source) return { error: "Session not found." };
+  if (source.completed) return { error: "Can't move a completed session." };
+
+  const dayOfWeek = new Date(`${toDate}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" });
+
+  const collisions = await queryRows<{ id: number; completed: boolean }>(
+    conn,
+    `SELECT id, completed FROM training_plan_daily
+     WHERE planned_date = $to_date AND session_type = $session_type AND id != $id`,
+    { to_date: toDate, session_type: source.session_type, id },
+  );
+
+  if (collisions.length > 1) {
+    return {
+      error: `That day already has ${collisions.length} ${source.session_type.replace(/_/g, " ")} sessions — remove one first or pick a different day.`,
+    };
+  }
+  if (collisions.length === 1 && collisions[0].completed) {
+    return { error: "That day's session is already completed and can't be replaced." };
+  }
+
+  await conn.run("BEGIN TRANSACTION");
+  try {
+    if (collisions.length === 1) {
+      await conn.run(
+        "UPDATE training_plan_daily SET planned_date = $planned_date, day_of_week = $day_of_week WHERE id = $id",
+        { planned_date: source.planned_date, day_of_week: source.day_of_week, id: collisions[0].id },
+      );
+    }
+    await conn.run(
+      "UPDATE training_plan_daily SET planned_date = $to_date, day_of_week = $day_of_week WHERE id = $id",
+      { to_date: toDate, day_of_week: dayOfWeek, id },
+    );
+    await conn.run("COMMIT");
+  } catch (err) {
+    await conn.run("ROLLBACK");
+    throw err;
+  }
+
+  return {};
+}
