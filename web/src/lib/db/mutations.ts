@@ -279,6 +279,7 @@ export interface PlanDayRow {
 }
 
 export async function queryPlanDay(conn: DuckDBConnection, ...ids: number[]): Promise<PlanDayRow[]> {
+  if (ids.length === 0) return [];
   return queryRows<PlanDayRow>(
     conn,
     `SELECT id, planned_date::VARCHAR AS planned_date, day_of_week, session_type, completed, description
@@ -473,6 +474,17 @@ export async function getAllRaceEvents<T = Record<string, unknown>>(conn: DuckDB
   );
 }
 
+// Returns the ISO (Mon-Sun) week-start date for a YYYY-MM-DD date string, as YYYY-MM-DD.
+function mondayOf(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  const mondayOffset = (d.getDay() + 6) % 7; // 0=Sun..6=Sat -> days back to Monday
+  d.setDate(d.getDate() - mondayOffset);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export async function moveDailySession(conn: DuckDBConnection, id: number, toDate: string): Promise<{ error?: string }> {
   const source = await queryRow<{
     id: number;
@@ -490,6 +502,10 @@ export async function moveDailySession(conn: DuckDBConnection, id: number, toDat
   if (source.completed) return { error: "Can't move a completed session." };
 
   const dayOfWeek = new Date(`${toDate}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" });
+
+  if (mondayOf(toDate) !== mondayOf(source.planned_date)) {
+    return { error: "Can't move a session to a different week." };
+  }
 
   const collisions = await queryRows<{ id: number; completed: boolean }>(
     conn,

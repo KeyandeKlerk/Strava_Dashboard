@@ -115,6 +115,16 @@ describe("moveDailySession", () => {
     expect(row.planned_date).toBe("2026-07-20");
   });
 
+  it("blocks moving a session to a different week", async () => {
+    const id = await addDailySession(conn, baseSession({ planned_date: "2026-07-20", day_of_week: "Monday" }));
+
+    const result = await moveDailySession(conn, id, "2026-07-27");
+
+    expect(result.error).toBe("Can't move a session to a different week.");
+    const [row] = await queryPlanDay(conn, id);
+    expect(row.planned_date).toBe("2026-07-20");
+  });
+
   it("blocks moving onto a day that already has two or more sessions of that type", async () => {
     const source = await addDailySession(conn, baseSession({ planned_date: "2026-07-20", session_type: "cross_training" }));
     await addDailySession(conn, baseSession({ planned_date: "2026-07-22", session_type: "cross_training", description: "Volleyball" }));

@@ -40,7 +40,7 @@ async function main() {
   await conn.run("CREATE SEQUENCE IF NOT EXISTS md.training_plan_daily_id_seq START 1");
   await conn.run(`
     CREATE TABLE md.training_plan_daily_new (
-      id INTEGER PRIMARY KEY DEFAULT nextval('md.training_plan_daily_id_seq'),
+      id INTEGER PRIMARY KEY DEFAULT nextval('training_plan_daily_id_seq'),
       planned_date DATE,
       week_number INTEGER,
       day_of_week VARCHAR,
