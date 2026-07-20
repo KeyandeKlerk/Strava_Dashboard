@@ -16,7 +16,17 @@ import {
   ZAxis,
 } from "recharts";
 import { shortDate } from "@/lib/shared";
-import { CHART_MARGIN, SEQUENTIAL_BLUE, SERIES, STATUS, TOOLTIP_STYLE, Y_AXIS_WIDTH, dateTooltipLabel } from "./chartTheme";
+import {
+  CHART_HEIGHT,
+  CHART_MARGIN,
+  SEQUENTIAL_BLUE,
+  SERIES,
+  STATUS,
+  TOOLTIP_STYLE,
+  Y_AXIS_WIDTH,
+  dateTooltipLabel,
+  scatterHitShape,
+} from "./chartTheme";
 
 // Z1 (easiest) -> Z5 (hardest) is an ordered magnitude, not arbitrary
 // identity, so it takes one sequential hue with monotone lightness steps
@@ -35,7 +45,7 @@ export function ZoneTimeChart({
   data: Array<{ week_start: string; z1_min: number; z2_min: number; z3_min: number; z4_min: number; z5_min: number }>;
 }) {
   return (
-    <ResponsiveContainer width="100%" height={280}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.primary}>
       <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
@@ -52,7 +62,7 @@ export function ZoneTimeChart({
 
 export function EasyPctChart({ data }: { data: Array<{ week_start: string; easy_pct: number | null }> }) {
   return (
-    <ResponsiveContainer width="100%" height={180}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.secondary}>
       <ComposedChart data={data.filter((d) => d.easy_pct != null)} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
@@ -67,13 +77,18 @@ export function EasyPctChart({ data }: { data: Array<{ week_start: string; easy_
 
 export function PaceTrendChart({ data }: { data: Array<{ activity_date: string; pace_min_per_km: number | null }> }) {
   return (
-    <ResponsiveContainer width="100%" height={260}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.secondary}>
       <ScatterChart margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="activity_date" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
         <YAxis dataKey="pace_min_per_km" width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} reversed domain={["auto", "auto"]} />
         <Tooltip {...TOOLTIP_STYLE} labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(2)} min/km`, "Pace"]} />
-        <Scatter data={data.filter((d) => d.pace_min_per_km != null)} dataKey="pace_min_per_km" fill={SERIES.blue} />
+        <Scatter
+          data={data.filter((d) => d.pace_min_per_km != null)}
+          dataKey="pace_min_per_km"
+          fill={SERIES.blue}
+          shape={scatterHitShape(SERIES.blue)}
+        />
       </ScatterChart>
     </ResponsiveContainer>
   );
@@ -95,7 +110,7 @@ function decouplingColor(v: number): string {
 export function DecouplingChart({ data }: { data: Array<{ activity_date: string; decoupling_pct: number | null }> }) {
   const recent = data.filter((d) => d.decoupling_pct != null).slice(-20);
   return (
-    <ResponsiveContainer width="100%" height={240}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.secondary}>
       <ComposedChart data={recent} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="activity_date" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
@@ -114,7 +129,7 @@ export function DecouplingChart({ data }: { data: Array<{ activity_date: string;
 
 export function QualityScoreChart({ data }: { data: Array<{ activity_date: string; quality_score: number; distance_km: number }> }) {
   return (
-    <ResponsiveContainer width="100%" height={300}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.secondary}>
       <ScatterChart margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="activity_date" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />

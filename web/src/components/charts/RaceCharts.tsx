@@ -1,11 +1,11 @@
 "use client";
 import { Area, Bar, CartesianGrid, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { shortDate } from "@/lib/shared";
-import { CHART_MARGIN, SERIES, TOOLTIP_STYLE, Y_AXIS_WIDTH, dateTooltipLabel } from "./chartTheme";
+import { CHART_HEIGHT, CHART_MARGIN, SERIES, TOOLTIP_STYLE, Y_AXIS_WIDTH, dateTooltipLabel } from "./chartTheme";
 
 export function WeeklyElevationChart({ data }: { data: Array<{ week_start: string; weekly_gain_m: number }> }) {
   return (
-    <ResponsiveContainer width="100%" height={260}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.primary}>
       <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
@@ -19,7 +19,7 @@ export function WeeklyElevationChart({ data }: { data: Array<{ week_start: strin
 
 export function ElevationProfileChart({ data }: { data: Array<{ checkpoint: string; km: number; elevation_m: number }> }) {
   return (
-    <ResponsiveContainer width="100%" height={240}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.secondary}>
       <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="km" tick={{ fontSize: 10 }} type="number" domain={[0, "dataMax"]} unit=" km" />

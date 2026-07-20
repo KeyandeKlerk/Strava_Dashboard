@@ -341,7 +341,7 @@ export interface LongRunHistoryRow {
   pct_time_z2: number | null;
 }
 
-export async function longRunHistory(conn: DuckDBConnection, minKm = 20.0): Promise<LongRunHistoryRow[]> {
+export async function longRunHistory(conn: DuckDBConnection, minKm = 20.0, limit?: number): Promise<LongRunHistoryRow[]> {
   return queryRows<LongRunHistoryRow>(
     conn,
     `SELECT
@@ -362,7 +362,8 @@ export async function longRunHistory(conn: DuckDBConnection, minKm = 20.0): Prom
      WHERE a.category = 'running'
        AND a.distance_km >= ${minKm}
        AND ${dateFilter("a")}
-     ORDER BY a.start_date_local DESC`,
+     ORDER BY a.start_date_local DESC
+     ${limit != null ? `LIMIT ${limit}` : ""}`,
   );
 }
 

@@ -1,5 +1,6 @@
 import { getTrainingLoadPageData } from "@/lib/pageData";
 import { RACE_DISTANCE_KM } from "@/lib/shared";
+import { StatCard } from "@/components/StatCard";
 import { ChartCard } from "@/components/charts/ChartCard";
 import {
   CategoryLoadChart,
@@ -23,6 +24,21 @@ export default async function TrainingLoadPage() {
           <p className="mt-2 text-sm text-neutral-500">No activity data yet. Run sync first.</p>
         ) : (
           <>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <StatCard
+                label="This Week"
+                value={`${distanceData[distanceData.length - 1].actual_km.toFixed(1)} km`}
+                caption={`Planned ${distanceData[distanceData.length - 1].planned_km.toFixed(1)} km`}
+              />
+              <StatCard
+                label="4wk Rolling Avg"
+                value={
+                  distanceData[distanceData.length - 1].rolling_4w_avg != null
+                    ? `${distanceData[distanceData.length - 1].rolling_4w_avg!.toFixed(1)} km`
+                    : "—"
+                }
+              />
+            </div>
             <ChartCard title="Weekly Distance" subtitle="Planned vs. actual running distance, km. Orange line is the 4-week rolling average.">
               <WeeklyDistanceChart data={distanceData} />
             </ChartCard>

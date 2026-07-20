@@ -77,6 +77,7 @@ export const getTodayPageData = unstable_cache(
         nutritionLog,
         pickerActivities,
         fuelingProjection,
+        milestones,
       };
     }
 
@@ -89,7 +90,17 @@ export const getTodayPageData = unstable_cache(
       }) ?? weekSummary[0];
 
     const daily = await dailyPlanForWeek(conn, current.week_number);
-    return { weekSummary, today, current, daily, nutritionTargets, nutritionLog, pickerActivities, fuelingProjection };
+    return {
+      weekSummary,
+      today,
+      current,
+      daily,
+      nutritionTargets,
+      nutritionLog,
+      pickerActivities,
+      fuelingProjection,
+      milestones,
+    };
   },
   ["today-page-data"],
   { tags: [DASHBOARD_DATA_TAG] },
@@ -174,8 +185,8 @@ export const getPlanHistoryPageData = unstable_cache(
   async () => {
     const conn = await getConnection();
     const [longRuns, recent, weekSummary] = await Promise.all([
-      longRunHistory(conn, 20.0),
-      recentActivities(conn, 15),
+      longRunHistory(conn, 20.0, 20),
+      recentActivities(conn, 20),
       weeklyCompletionSummary(conn),
     ]);
 

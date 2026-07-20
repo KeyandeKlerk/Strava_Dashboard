@@ -1,12 +1,22 @@
 import { getTodayPageData } from "@/lib/pageData";
 import { DailySessionList } from "@/components/DailySessionList";
 import { NutritionSection } from "@/components/NutritionSection";
+import { StatCard } from "@/components/StatCard";
 
 export const runtime = "nodejs";
 
 export default async function TodayPage() {
-  const { weekSummary, today, current, daily, nutritionTargets, nutritionLog, pickerActivities, fuelingProjection } =
-    await getTodayPageData();
+  const {
+    weekSummary,
+    today,
+    current,
+    daily,
+    nutritionTargets,
+    nutritionLog,
+    pickerActivities,
+    fuelingProjection,
+    milestones,
+  } = await getTodayPageData();
 
   if (weekSummary.length === 0 || !current) {
     return (
@@ -31,6 +41,14 @@ export default async function TodayPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold">This Week&apos;s Plan</h1>
+      <div className="grid grid-cols-2 gap-2">
+        <StatCard label="Week Phase" value={current.phase} caption={current.is_deload ? "Deload week" : "Build week"} />
+        <StatCard
+          label="Projected Finish"
+          value={milestones.projected_finish_h != null ? `${milestones.projected_finish_h.toFixed(1)}h` : "—"}
+          caption={`Cutoff ${milestones.cutoff_h.toFixed(0)}h`}
+        />
+      </div>
       <div>
         <div className="h-3 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
           <div

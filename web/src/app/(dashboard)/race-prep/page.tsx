@@ -1,5 +1,6 @@
 import { getRacePrepPageData } from "@/lib/pageData";
 import { RACE_DATE, fmtPace } from "@/lib/shared";
+import { StatCard } from "@/components/StatCard";
 import { ChartCard } from "@/components/charts/ChartCard";
 import { ElevationProfileChart, WeeklyElevationChart } from "@/components/charts/RaceCharts";
 import { addRaceEvent } from "./actions";
@@ -82,19 +83,19 @@ export default async function RacePrepPage() {
       <div>
         <h2 className="text-base font-semibold">Comrades 2027 Milestones</h2>
         <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <MilestoneStat label="Longest Run" value={`${milestones.longest_run_km.toFixed(1)} km`} sub={`${milestones.longest_run_pct_race.toFixed(0)}% of race`} />
-          <MilestoneStat label="Total Elev Gain" value={`${milestones.total_gain_m.toLocaleString()} m`} />
-          <MilestoneStat
+          <StatCard label="Longest Run" value={`${milestones.longest_run_km.toFixed(1)} km`} caption={`${milestones.longest_run_pct_race.toFixed(0)}% of race`} />
+          <StatCard label="Total Elev Gain" value={`${milestones.total_gain_m.toLocaleString()} m`} />
+          <StatCard
             label="Descent Practiced"
             value={`${milestones.total_descent_m.toFixed(0)} m`}
-            sub={`${milestones.descent_pct_practiced.toFixed(0)}% of ${milestones.race_descent_m.toFixed(0)}m target`}
+            caption={`${milestones.descent_pct_practiced.toFixed(0)}% of ${milestones.race_descent_m.toFixed(0)}m target`}
           />
-          <MilestoneStat label="Runs ≥30 km" value={String(milestones.runs_30plus)} sub={`${milestones.runs_20plus} runs ≥20 km`} />
-          <MilestoneStat label="Best Back-to-Back" value={milestones.max_b2b_km ? `${milestones.max_b2b_km.toFixed(1)} km` : "—"} />
-          <MilestoneStat
+          <StatCard label="Runs ≥30 km" value={String(milestones.runs_30plus)} caption={`${milestones.runs_20plus} runs ≥20 km`} />
+          <StatCard label="Best Back-to-Back" value={milestones.max_b2b_km ? `${milestones.max_b2b_km.toFixed(1)} km` : "—"} />
+          <StatCard
             label="Projected Finish"
             value={milestones.projected_finish_h ? `${milestones.projected_finish_h.toFixed(2)}h` : "—"}
-            sub={`vs ${milestones.cutoff_h.toFixed(0)}h cutoff`}
+            caption={`vs ${milestones.cutoff_h.toFixed(0)}h cutoff`}
           />
         </div>
 
@@ -208,16 +209,6 @@ export default async function RacePrepPage() {
         )}
       </div>
       <p className="text-xs text-neutral-400">Race date reference: {RACE_DATE}</p>
-    </div>
-  );
-}
-
-function MilestoneStat({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-      <div className="text-xs text-neutral-500">{label}</div>
-      <div className="text-lg font-semibold">{value}</div>
-      {sub && <div className="text-xs text-neutral-500">{sub}</div>}
     </div>
   );
 }

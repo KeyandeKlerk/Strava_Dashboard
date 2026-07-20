@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import { shortDate, shortMonth } from "@/lib/shared";
 
 // Shared layout so every chart's plot area sits consistently in its card.
@@ -8,6 +9,10 @@ import { shortDate, shortMonth } from "@/lib/shared";
 // value keeps the plot area centered instead.
 export const CHART_MARGIN = { top: 8, right: 20, left: 0, bottom: 0 };
 export const Y_AXIS_WIDTH = 40;
+
+// One hero chart per page at `primary`, everything else at `secondary` — a
+// deliberate 2-tier system instead of each chart picking its own height.
+export const CHART_HEIGHT = { primary: 280, secondary: 220 } as const;
 
 // Recharts' Tooltip `labelFormatter` type doesn't accept a plain
 // `(iso: string) => string` (its label param type is a ReactNode/any
@@ -38,6 +43,11 @@ export const TOOLTIP_STYLE = {
     color: "var(--foreground)",
     fontWeight: 600,
   },
+  // Default 'hover' relies on the browser synthesizing a mouse event from a
+  // touch, which is inconsistent on mobile — 'click' shows deterministically
+  // on tap and stays up until the next tap, which also reads better than
+  // hover-preview on a phone-first PWA.
+  trigger: "click" as const,
 };
 
 // A validated 8-hue categorical palette (fixed order, never cycled — see
@@ -79,3 +89,22 @@ export const STATUS = {
   serious: "var(--chart-status-serious)",
   critical: "var(--chart-status-critical)",
 };
+
+// Bare Scatter dots default to a small symbol with no forgiving hit area —
+// on a touchscreen a tap that's visually "on" the dot often lands just
+// outside its actual hit area. Renders the same visible dot plus an
+// invisible 24px-diameter circle around it purely for hit-testing (not a
+// visible border — that would add ink that isn't data). `fill` is bound as
+// a closure argument (not read from Recharts' per-point props, which don't
+// carry the series' `fill` through to a custom `shape`).
+export function scatterHitShape(fill: string, radius = 4) {
+  return ({ cx, cy }: { cx?: number; cy?: number }) => {
+    if (cx == null || cy == null) return createElement("g", null);
+    return createElement(
+      "g",
+      null,
+      createElement("circle", { cx, cy, r: 12, fill: "transparent" }),
+      createElement("circle", { cx, cy, r: radius, fill }),
+    );
+  };
+}

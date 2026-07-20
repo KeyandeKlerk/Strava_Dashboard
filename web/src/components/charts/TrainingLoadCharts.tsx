@@ -12,7 +12,16 @@ import {
   YAxis,
 } from "recharts";
 import { shortDate, shortMonth } from "@/lib/shared";
-import { CHART_MARGIN, SERIES, STATUS, TOOLTIP_STYLE, Y_AXIS_WIDTH, dateTooltipLabel, monthTooltipLabel } from "./chartTheme";
+import {
+  CHART_HEIGHT,
+  CHART_MARGIN,
+  SERIES,
+  STATUS,
+  TOOLTIP_STYLE,
+  Y_AXIS_WIDTH,
+  dateTooltipLabel,
+  monthTooltipLabel,
+} from "./chartTheme";
 
 // Four distinct activity types stacked in one chart — true categorical
 // identity, so each gets its own palette slot (1-4, the validated
@@ -30,7 +39,7 @@ export function WeeklyDistanceChart({
   data: Array<{ week_start: string; planned_km: number; actual_km: number; rolling_4w_avg: number | null }>;
 }) {
   return (
-    <ResponsiveContainer width="100%" height={280}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.primary}>
       <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
@@ -47,7 +56,7 @@ export function WeeklyDistanceChart({
 
 export function TimeOnFeetChart({ data }: { data: Array<{ week_start: string; run_time_h: number }> }) {
   return (
-    <ResponsiveContainer width="100%" height={260}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.secondary}>
       <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
@@ -62,7 +71,7 @@ export function TimeOnFeetChart({ data }: { data: Array<{ week_start: string; ru
 
 export function MonthlyDistanceChart({ data }: { data: Array<{ month_start: string; run_distance_km: number }> }) {
   return (
-    <ResponsiveContainer width="100%" height={220}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.secondary}>
       <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="month_start" tickFormatter={shortMonth} tick={{ fontSize: 10 }} />
@@ -76,7 +85,7 @@ export function MonthlyDistanceChart({ data }: { data: Array<{ month_start: stri
 
 export function MonthlyTimeChart({ data }: { data: Array<{ month_start: string; run_time_h: number }> }) {
   return (
-    <ResponsiveContainer width="100%" height={220}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.secondary}>
       <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="month_start" tickFormatter={shortMonth} tick={{ fontSize: 10 }} />
@@ -90,7 +99,7 @@ export function MonthlyTimeChart({ data }: { data: Array<{ month_start: string; 
 
 export function LongRunProgressionChart({ data, raceDistanceKm }: { data: Array<{ week_start: string; longest_run_km: number }>; raceDistanceKm: number }) {
   return (
-    <ResponsiveContainer width="100%" height={240}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.secondary}>
       <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
@@ -110,7 +119,7 @@ export function CategoryLoadChart({
   data: Array<{ week_start: string; running_load: number; volleyball_load: number; cricket_load: number; gym_load: number }>;
 }) {
   return (
-    <ResponsiveContainer width="100%" height={280}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.secondary}>
       <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />

@@ -345,6 +345,27 @@ it("longRunHistory filters by distance", async () => {
   approx(rows[0].distance_km, 25.0);
 });
 
+describe("longRunHistory limit", () => {
+  it("is unbounded when omitted", async () => {
+    for (let i = 0; i < 5; i++) {
+      await insertRun(100 + i, `2026-03-${11 + i}T07:00:00`, 25.0);
+    }
+    const rows = await metrics.longRunHistory(conn, 20.0);
+    expect(rows.length).toBe(5);
+  });
+
+  it("caps to the most recent N when provided", async () => {
+    for (let i = 0; i < 5; i++) {
+      await insertRun(200 + i, `2026-03-${11 + i}T07:00:00`, 25.0);
+    }
+    const rows = await metrics.longRunHistory(conn, 20.0, 3);
+    expect(rows.length).toBe(3);
+    // ORDER BY start_date_local DESC, so the 3 kept are the most recent.
+    expect(rows[0].activity_date).toBe("2026-03-15");
+    expect(rows[2].activity_date).toBe("2026-03-13");
+  });
+});
+
 it("monthlyVolume groups by month", async () => {
   await insertRun(1, "2026-03-11T07:00:00", 15.0);
   await insertRun(2, "2026-03-18T07:00:00", 20.0);

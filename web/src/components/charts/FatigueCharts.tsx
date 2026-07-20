@@ -15,11 +15,20 @@ import {
 } from "recharts";
 import type { AcwrRow, CtlAtlTsbRow, EfficiencyFactorRow, MonotonyRow, RampRateRow } from "@/lib/metrics";
 import { shortDate } from "@/lib/shared";
-import { CHART_MARGIN, SERIES, STATUS, TOOLTIP_STYLE, Y_AXIS_WIDTH, dateTooltipLabel } from "./chartTheme";
+import {
+  CHART_HEIGHT,
+  CHART_MARGIN,
+  SERIES,
+  STATUS,
+  TOOLTIP_STYLE,
+  Y_AXIS_WIDTH,
+  dateTooltipLabel,
+  scatterHitShape,
+} from "./chartTheme";
 
 export function TsbChart({ data }: { data: CtlAtlTsbRow[] }) {
   return (
-    <ResponsiveContainer width="100%" height={260}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.primary}>
       <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="day" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
@@ -35,13 +44,13 @@ export function TsbChart({ data }: { data: CtlAtlTsbRow[] }) {
 
 export function EfficiencyFactorChart({ data }: { data: EfficiencyFactorRow[] }) {
   return (
-    <ResponsiveContainer width="100%" height={220}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.secondary}>
       <ScatterChart margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
         <YAxis dataKey="mean_ef" width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} domain={["auto", "auto"]} />
         <Tooltip {...TOOLTIP_STYLE} labelFormatter={dateTooltipLabel} />
-        <Scatter data={data} dataKey="mean_ef" fill={SERIES.blue} />
+        <Scatter data={data} dataKey="mean_ef" fill={SERIES.blue} shape={scatterHitShape(SERIES.blue)} />
       </ScatterChart>
     </ResponsiveContainer>
   );
@@ -49,7 +58,7 @@ export function EfficiencyFactorChart({ data }: { data: EfficiencyFactorRow[] })
 
 export function AcwrChart({ data }: { data: AcwrRow[] }) {
   return (
-    <ResponsiveContainer width="100%" height={220}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.secondary}>
       <ComposedChart data={data} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="day" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
@@ -67,7 +76,7 @@ export function AcwrChart({ data }: { data: AcwrRow[] }) {
 export function RampRateChart({ data }: { data: RampRateRow[] }) {
   const recent = data.filter((r) => r.ramp_pct != null).slice(-112);
   return (
-    <ResponsiveContainer width="100%" height={220}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.secondary}>
       <ComposedChart data={recent} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="day" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
@@ -84,7 +93,7 @@ export function RampRateChart({ data }: { data: RampRateRow[] }) {
 export function MonotonyChart({ data }: { data: MonotonyRow[] }) {
   const recent = data.filter((r) => r.monotony != null).slice(-112);
   return (
-    <ResponsiveContainer width="100%" height={200}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.secondary}>
       <ComposedChart data={recent} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="day" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
@@ -99,7 +108,7 @@ export function MonotonyChart({ data }: { data: MonotonyRow[] }) {
 export function StrainChart({ data }: { data: MonotonyRow[] }) {
   const recent = data.filter((r) => r.monotony != null).slice(-112);
   return (
-    <ResponsiveContainer width="100%" height={200}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.secondary}>
       <ComposedChart data={recent} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="day" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
