@@ -366,6 +366,71 @@ export async function longRunHistory(conn: DuckDBConnection, minKm = 20.0): Prom
   );
 }
 
+export interface ActivityDetailRow {
+  id: number;
+  name: string;
+  category: string;
+  sport_type: string;
+  activity_date: string;
+  distance_km: number | null;
+  moving_time_min: number | null;
+  elevation_gain_m: number | null;
+  average_heartrate: number | null;
+  max_heartrate: number | null;
+  average_cadence: number | null;
+  load_score: number | null;
+  gear_name: string | null;
+  pace_min_km: number | null;
+  decoupling_pct: number | null;
+  grade_adjusted_pace: number | null;
+  elevation_loss_m: number | null;
+  z1_min: number | null;
+  z2_min: number | null;
+  z3_min: number | null;
+  z4_min: number | null;
+  z5_min: number | null;
+}
+
+// LEFT JOIN, not the longRunQualityScores-style inner join — non-running
+// categories and not-yet-backfilled runs have no activity_streams_derived
+// row but still need to show their basic activity stats.
+export async function getActivityDetail(conn: DuckDBConnection, activityId: number): Promise<ActivityDetailRow | null> {
+  const row = await queryRow<ActivityDetailRow>(
+    conn,
+    `SELECT
+        a.id,
+        a.name,
+        a.category,
+        a.sport_type,
+        a.start_date_local::DATE::VARCHAR AS activity_date,
+        a.distance_km,
+        a.moving_time_min,
+        a.elevation_gain_m,
+        a.average_heartrate,
+        a.max_heartrate,
+        a.average_cadence,
+        a.load_score,
+        a.gear_name,
+        CASE WHEN a.average_speed_kmh > 0
+            THEN ROUND(60.0 / a.average_speed_kmh, 2)
+            ELSE NULL
+        END AS pace_min_km,
+        sd.decoupling_pct,
+        sd.grade_adjusted_pace,
+        sd.elevation_loss_m,
+        ROUND(a.moving_time_min * sd.pct_time_z1 / 100.0, 1) AS z1_min,
+        ROUND(a.moving_time_min * sd.pct_time_z2 / 100.0, 1) AS z2_min,
+        ROUND(a.moving_time_min * sd.pct_time_z3 / 100.0, 1) AS z3_min,
+        ROUND(a.moving_time_min * sd.pct_time_z4 / 100.0, 1) AS z4_min,
+        ROUND(a.moving_time_min * sd.pct_time_z5 / 100.0, 1) AS z5_min
+     FROM activities a
+     LEFT JOIN activity_streams_derived sd ON a.id = sd.activity_id
+     WHERE a.id = $id`,
+    { id: activityId },
+  );
+  return row ?? null;
+}
+
 export interface MonthlyVolumeRow {
   month_start: string;
   run_distance_km: number;
@@ -900,6 +965,120 @@ export async function comradesProjectedSplits(conn: DuckDBConnection): Promise<C
   });
 
   return rows;
+}
+
+export interface NutritionTargets {
+  target_carbs_g_per_hour: number;
+  target_sodium_mg_per_hour: number;
+  target_fluid_ml_per_hour: number | null;
+}
+
+export async function getNutritionTargets(conn: DuckDBConnection): Promise<NutritionTargets | null> {
+  const row = await queryRow<NutritionTargets>(
+    conn,
+    `SELECT target_carbs_g_per_hour, target_sodium_mg_per_hour, target_fluid_ml_per_hour
+     FROM nutrition_targets WHERE id = 1`,
+  );
+  return row ?? null;
+}
+
+export interface NutritionLogRow {
+  id: number;
+  activity_date: string;
+  activity_name: string;
+  distance_km: number;
+  carbs_g: number;
+  sodium_mg: number;
+  fluid_ml: number | null;
+  notes: string | null;
+  carbs_g_per_hour: number | null;
+  sodium_mg_per_hour: number | null;
+}
+
+// Ascending (oldest -> newest), matching every other chart-feeding query in
+// this file — charts render array order left-to-right, so anything DESC
+// needs re-sorting before it reaches a chart component, not re-sliced as if
+// it were already ascending (see FatigueCharts.tsx's ramp/monotony/strain fix).
+export async function nutritionLogHistory(conn: DuckDBConnection): Promise<NutritionLogRow[]> {
+  return queryRows<NutritionLogRow>(
+    conn,
+    `SELECT
+        n.id,
+        a.start_date_local::DATE::VARCHAR AS activity_date,
+        a.name AS activity_name,
+        a.distance_km,
+        n.carbs_g,
+        n.sodium_mg,
+        n.fluid_ml,
+        n.notes,
+        CASE WHEN a.moving_time_min > 0 THEN ROUND(n.carbs_g / (a.moving_time_min / 60.0), 1) ELSE NULL END AS carbs_g_per_hour,
+        CASE WHEN a.moving_time_min > 0 THEN ROUND(n.sodium_mg / (a.moving_time_min / 60.0), 0) ELSE NULL END AS sodium_mg_per_hour
+     FROM nutrition_logs n
+     JOIN activities a ON a.id = n.activity_id
+     ORDER BY a.start_date_local`,
+  );
+}
+
+export async function nutritionLogsForActivity(conn: DuckDBConnection, activityId: number): Promise<NutritionLogRow[]> {
+  return queryRows<NutritionLogRow>(
+    conn,
+    `SELECT
+        n.id,
+        a.start_date_local::DATE::VARCHAR AS activity_date,
+        a.name AS activity_name,
+        a.distance_km,
+        n.carbs_g,
+        n.sodium_mg,
+        n.fluid_ml,
+        n.notes,
+        CASE WHEN a.moving_time_min > 0 THEN ROUND(n.carbs_g / (a.moving_time_min / 60.0), 1) ELSE NULL END AS carbs_g_per_hour,
+        CASE WHEN a.moving_time_min > 0 THEN ROUND(n.sodium_mg / (a.moving_time_min / 60.0), 0) ELSE NULL END AS sodium_mg_per_hour
+     FROM nutrition_logs n
+     JOIN activities a ON a.id = n.activity_id
+     WHERE n.activity_id = $activity_id
+     ORDER BY n.id`,
+    { activity_id: activityId },
+  );
+}
+
+export interface RunningActivityOption {
+  id: number;
+  activity_date: string;
+  name: string;
+  distance_km: number;
+}
+
+export async function recentRunningActivitiesForPicker(conn: DuckDBConnection, n = 10): Promise<RunningActivityOption[]> {
+  return queryRows<RunningActivityOption>(
+    conn,
+    `SELECT id, start_date_local::DATE::VARCHAR AS activity_date, name, ROUND(distance_km, 1) AS distance_km
+     FROM activities
+     WHERE category = 'running'
+     ORDER BY start_date_local DESC
+     LIMIT ${n}`,
+  );
+}
+
+export interface ProjectedRaceFueling {
+  projected_finish_h: number;
+  total_carbs_g: number;
+  total_sodium_mg: number;
+  total_fluid_ml: number | null;
+}
+
+export function projectedRaceFueling(
+  projectedFinishH: number | null,
+  targets: NutritionTargets | null,
+): ProjectedRaceFueling | null {
+  if (!projectedFinishH || !targets) return null;
+  return {
+    projected_finish_h: projectedFinishH,
+    total_carbs_g: Math.round(targets.target_carbs_g_per_hour * projectedFinishH),
+    total_sodium_mg: Math.round(targets.target_sodium_mg_per_hour * projectedFinishH),
+    total_fluid_ml: targets.target_fluid_ml_per_hour != null
+      ? Math.round(targets.target_fluid_ml_per_hour * projectedFinishH)
+      : null,
+  };
 }
 
 export interface ShoeMileageRow {

@@ -1,7 +1,17 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestConnection } from "./testHelper";
-import { addDailySession, deleteDailySession, moveDailySession, queryPlanDay } from "./mutations";
+import {
+  addDailySession,
+  addNutritionLog,
+  deleteDailySession,
+  deleteNutritionLog,
+  moveDailySession,
+  queryPlanDay,
+  upsertActivity,
+  upsertNutritionTargets,
+} from "./mutations";
+import { queryRow } from "./client";
 
 let conn: DuckDBConnection;
 
@@ -135,5 +145,56 @@ describe("moveDailySession", () => {
     expect(result.error).toBe("That day already has 2 cross training sessions — remove one first or pick a different day.");
     const [row] = await queryPlanDay(conn, source);
     expect(row.planned_date).toBe("2026-07-20");
+  });
+});
+
+describe("upsertNutritionTargets", () => {
+  it("inserts then updates the single target row in place", async () => {
+    await upsertNutritionTargets(conn, { target_carbs_g_per_hour: 60, target_sodium_mg_per_hour: 500 });
+    await upsertNutritionTargets(conn, { target_carbs_g_per_hour: 90, target_sodium_mg_per_hour: 700, target_fluid_ml_per_hour: 500 });
+
+    const row = await queryRow<{ target_carbs_g_per_hour: number; target_sodium_mg_per_hour: number; target_fluid_ml_per_hour: number }>(
+      conn,
+      "SELECT target_carbs_g_per_hour, target_sodium_mg_per_hour, target_fluid_ml_per_hour FROM nutrition_targets",
+    );
+    expect(row?.target_carbs_g_per_hour).toBe(90);
+    expect(row?.target_sodium_mg_per_hour).toBe(700);
+    expect(row?.target_fluid_ml_per_hour).toBe(500);
+
+    const countRow = await queryRow<{ n: number | bigint }>(conn, "SELECT COUNT(*) AS n FROM nutrition_targets");
+    expect(Number(countRow?.n)).toBe(1);
+  });
+});
+
+describe("addNutritionLog / deleteNutritionLog", () => {
+  it("adds a log entry tied to an activity and returns its id", async () => {
+    await upsertActivity(conn, { id: 501, name: "Long run", category: "running", start_date_local: "2026-03-01T07:00:00", moving_time_min: 180 });
+
+    const id = await addNutritionLog(conn, {
+      activity_id: 501,
+      logged_date: "2026-03-01",
+      carbs_g: 200,
+      sodium_mg: 1500,
+      fluid_ml: 1200,
+      notes: "2x gels/hr",
+    });
+
+    const row = await queryRow<{ activity_id: number; carbs_g: number }>(
+      conn,
+      "SELECT activity_id, carbs_g FROM nutrition_logs WHERE id = $id",
+      { id },
+    );
+    expect(row?.activity_id).toBe(501);
+    expect(row?.carbs_g).toBe(200);
+  });
+
+  it("removes a log entry", async () => {
+    await upsertActivity(conn, { id: 502, name: "Long run", category: "running", start_date_local: "2026-03-01T07:00:00", moving_time_min: 180 });
+    const id = await addNutritionLog(conn, { activity_id: 502, logged_date: "2026-03-01", carbs_g: 200, sodium_mg: 1500 });
+
+    await deleteNutritionLog(conn, id);
+
+    const row = await queryRow(conn, "SELECT id FROM nutrition_logs WHERE id = $id", { id });
+    expect(row).toBeUndefined();
   });
 });

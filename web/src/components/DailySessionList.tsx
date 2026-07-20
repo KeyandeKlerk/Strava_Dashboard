@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { INTENSITY_LABEL, SESSION_ICON, weekDates } from "@/lib/shared";
 import { EditSessionSheet } from "@/components/EditSessionSheet";
+import { WorkoutDetailSheet } from "@/components/WorkoutDetailSheet";
 import type { DailyPlanRow } from "@/lib/metrics";
 
 function statusIcon(row: DailyPlanRow, today: string): string {
@@ -30,6 +31,7 @@ export function DailySessionList({
 }) {
   const [editing, setEditing] = useState<DailyPlanRow | null>(null);
   const [adding, setAdding] = useState(false);
+  const [viewingActivityId, setViewingActivityId] = useState<number | null>(null);
   const dates = weekDates(weekStartDate);
   const ordered = [...daily].sort((a, b) => Number(isResolved(a, today)) - Number(isResolved(b, today)));
 
@@ -48,12 +50,18 @@ export function DailySessionList({
               day: "numeric",
             });
             const editable = !row.completed;
+            const viewable = row.completed && row.completed_activity_id != null;
+            const onRowClick = editable
+              ? () => setEditing(row)
+              : viewable
+                ? () => setViewingActivityId(row.completed_activity_id!)
+                : undefined;
             return (
               <li
                 key={row.id}
-                onClick={editable ? () => setEditing(row) : undefined}
+                onClick={onRowClick}
                 className={`rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800 ${
-                  editable ? "cursor-pointer" : ""
+                  onRowClick ? "cursor-pointer" : ""
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -108,6 +116,9 @@ export function DailySessionList({
           weekDates={dates}
           onClose={() => setAdding(false)}
         />
+      )}
+      {viewingActivityId != null && (
+        <WorkoutDetailSheet activityId={viewingActivityId} onClose={() => setViewingActivityId(null)} />
       )}
     </>
   );

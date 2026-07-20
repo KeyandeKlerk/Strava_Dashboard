@@ -16,12 +16,16 @@ import {
   COMRADES_CHECKPOINTS,
   ctlAtlTsbHistory,
   dailyPlanForWeek,
+  getNutritionTargets,
   longRunHistory,
   longRunPct,
   longRunQualityScores,
   monthlyVolume,
+  nutritionLogHistory,
   planAdherence,
+  projectedRaceFueling,
   recentActivities,
+  recentRunningActivitiesForPicker,
   runPaceTrend,
   shoeMileage,
   weeklyCategoryLoad,
@@ -55,8 +59,25 @@ export const getTodayPageData = unstable_cache(
   async () => {
     const conn = await getConnection();
     const weekSummary = await weeklyCompletionSummary(conn);
+    const [nutritionTargets, nutritionLog, pickerActivities, milestones] = await Promise.all([
+      getNutritionTargets(conn),
+      nutritionLogHistory(conn),
+      recentRunningActivitiesForPicker(conn),
+      comradesMilestones(conn),
+    ]);
+    const fuelingProjection = projectedRaceFueling(milestones.projected_finish_h, nutritionTargets);
+
     if (weekSummary.length === 0) {
-      return { weekSummary, today: todayIso(), current: null, daily: [] as Awaited<ReturnType<typeof dailyPlanForWeek>> };
+      return {
+        weekSummary,
+        today: todayIso(),
+        current: null,
+        daily: [] as Awaited<ReturnType<typeof dailyPlanForWeek>>,
+        nutritionTargets,
+        nutritionLog,
+        pickerActivities,
+        fuelingProjection,
+      };
     }
 
     const today = todayIso();
@@ -68,7 +89,7 @@ export const getTodayPageData = unstable_cache(
       }) ?? weekSummary[0];
 
     const daily = await dailyPlanForWeek(conn, current.week_number);
-    return { weekSummary, today, current, daily };
+    return { weekSummary, today, current, daily, nutritionTargets, nutritionLog, pickerActivities, fuelingProjection };
   },
   ["today-page-data"],
   { tags: [DASHBOARD_DATA_TAG] },

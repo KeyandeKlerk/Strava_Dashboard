@@ -464,6 +464,60 @@ export async function upsertRaceAnalysis(conn: DuckDBConnection, analysis: RaceA
   );
 }
 
+export interface NutritionTargetsInput {
+  target_carbs_g_per_hour: number;
+  target_sodium_mg_per_hour: number;
+  target_fluid_ml_per_hour?: number | null;
+}
+
+export async function upsertNutritionTargets(conn: DuckDBConnection, targets: NutritionTargetsInput): Promise<void> {
+  await conn.run(
+    `INSERT INTO nutrition_targets (id, target_carbs_g_per_hour, target_sodium_mg_per_hour, target_fluid_ml_per_hour, updated_at)
+     VALUES (1, $target_carbs_g_per_hour, $target_sodium_mg_per_hour, $target_fluid_ml_per_hour, now())
+     ON CONFLICT (id) DO UPDATE SET
+        target_carbs_g_per_hour = excluded.target_carbs_g_per_hour,
+        target_sodium_mg_per_hour = excluded.target_sodium_mg_per_hour,
+        target_fluid_ml_per_hour = excluded.target_fluid_ml_per_hour,
+        updated_at = excluded.updated_at`,
+    {
+      target_carbs_g_per_hour: targets.target_carbs_g_per_hour,
+      target_sodium_mg_per_hour: targets.target_sodium_mg_per_hour,
+      target_fluid_ml_per_hour: targets.target_fluid_ml_per_hour ?? null,
+    },
+  );
+}
+
+export interface NutritionLogInput {
+  activity_id: number;
+  logged_date: string;
+  carbs_g: number;
+  sodium_mg: number;
+  fluid_ml?: number | null;
+  notes?: string | null;
+}
+
+export async function addNutritionLog(conn: DuckDBConnection, entry: NutritionLogInput): Promise<number> {
+  const row = await queryRow<{ id: number }>(
+    conn,
+    `INSERT INTO nutrition_logs (activity_id, logged_date, carbs_g, sodium_mg, fluid_ml, notes)
+     VALUES ($activity_id, $logged_date, $carbs_g, $sodium_mg, $fluid_ml, $notes)
+     RETURNING id`,
+    {
+      activity_id: entry.activity_id,
+      logged_date: entry.logged_date,
+      carbs_g: entry.carbs_g,
+      sodium_mg: entry.sodium_mg,
+      fluid_ml: entry.fluid_ml ?? null,
+      notes: entry.notes ?? null,
+    },
+  );
+  return Number(row?.id);
+}
+
+export async function deleteNutritionLog(conn: DuckDBConnection, id: number): Promise<void> {
+  await conn.run("DELETE FROM nutrition_logs WHERE id = $id", { id });
+}
+
 export async function getAllRaceEvents<T = Record<string, unknown>>(conn: DuckDBConnection) {
   return queryRows<T>(
     conn,

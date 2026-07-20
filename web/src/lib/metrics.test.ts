@@ -11,6 +11,8 @@ import {
   upsertRaceEvent,
   upsertRaceAnalysis,
   addDailySession,
+  upsertNutritionTargets,
+  addNutritionLog,
 } from "./db/mutations";
 import * as metrics from "./metrics";
 
@@ -540,5 +542,119 @@ describe("dailyPlanForWeek", () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0].id).toBe(id);
+  });
+});
+
+describe("nutritionLogHistory", () => {
+  it("returns empty when no logs", async () => {
+    const rows = await metrics.nutritionLogHistory(conn);
+    expect(rows.length).toBe(0);
+  });
+
+  it("computes g/hr and mg/hr rates from moving time, ascending by activity date", async () => {
+    await insertRun(701, "2026-03-01T07:00:00", 25.0, { movingTimeMin: 120.0 }); // 2h run
+    await insertRun(702, "2026-03-05T07:00:00", 30.0, { movingTimeMin: 180.0 }); // 3h run
+    await addNutritionLog(conn, { activity_id: 701, logged_date: "2026-03-01", carbs_g: 120, sodium_mg: 1000 });
+    await addNutritionLog(conn, { activity_id: 702, logged_date: "2026-03-05", carbs_g: 210, sodium_mg: 1800 });
+
+    const rows = await metrics.nutritionLogHistory(conn);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].activity_date).toBe("2026-03-01");
+    approx(rows[0].carbs_g_per_hour!, 60.0);
+    approx(rows[0].sodium_mg_per_hour!, 500.0);
+    expect(rows[1].activity_date).toBe("2026-03-05");
+    approx(rows[1].carbs_g_per_hour!, 70.0);
+    approx(rows[1].sodium_mg_per_hour!, 600.0);
+  });
+
+  it("guards against zero moving time", async () => {
+    await insertRun(703, "2026-03-01T07:00:00", 25.0, { movingTimeMin: 0 });
+    await addNutritionLog(conn, { activity_id: 703, logged_date: "2026-03-01", carbs_g: 60, sodium_mg: 500 });
+    const rows = await metrics.nutritionLogHistory(conn);
+    expect(rows[0].carbs_g_per_hour).toBeNull();
+    expect(rows[0].sodium_mg_per_hour).toBeNull();
+  });
+});
+
+describe("getNutritionTargets", () => {
+  it("returns null when unset", async () => {
+    expect(await metrics.getNutritionTargets(conn)).toBeNull();
+  });
+
+  it("returns the upserted targets", async () => {
+    await upsertNutritionTargets(conn, {
+      target_carbs_g_per_hour: 90,
+      target_sodium_mg_per_hour: 700,
+      target_fluid_ml_per_hour: 500,
+    });
+    const targets = await metrics.getNutritionTargets(conn);
+    expect(targets).not.toBeNull();
+    approx(targets!.target_carbs_g_per_hour, 90);
+    approx(targets!.target_sodium_mg_per_hour, 700);
+  });
+});
+
+describe("projectedRaceFueling", () => {
+  it("returns null without a finish projection or targets", () => {
+    expect(metrics.projectedRaceFueling(null, { target_carbs_g_per_hour: 90, target_sodium_mg_per_hour: 700, target_fluid_ml_per_hour: null })).toBeNull();
+    expect(metrics.projectedRaceFueling(10, null)).toBeNull();
+  });
+
+  it("scales target rates by projected finish hours", () => {
+    const result = metrics.projectedRaceFueling(10, {
+      target_carbs_g_per_hour: 90,
+      target_sodium_mg_per_hour: 700,
+      target_fluid_ml_per_hour: 500,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.total_carbs_g).toBe(900);
+    expect(result!.total_sodium_mg).toBe(7000);
+    expect(result!.total_fluid_ml).toBe(5000);
+  });
+});
+
+describe("getActivityDetail", () => {
+  it("returns null for an unknown id", async () => {
+    expect(await metrics.getActivityDetail(conn, 999999)).toBeNull();
+  });
+
+  it("returns basic stats with null derived fields when no streams data exists", async () => {
+    await insertGym(801, "2026-03-01T07:00:00", 45.0);
+    const row = await metrics.getActivityDetail(conn, 801);
+    expect(row).not.toBeNull();
+    expect(row!.category).toBe("gym");
+    expect(row!.moving_time_min).toBe(45.0);
+    expect(row!.decoupling_pct).toBeNull();
+    expect(row!.z1_min).toBeNull();
+  });
+
+  it("returns full stats including pace and zone minutes for a run with streams data", async () => {
+    await insertRunWithStreams(802, "2026-03-05T07:00:00", 20.0, 145.0, 10.0, { pctZ2: 60.0, decoupling: 2.0 });
+    const row = await metrics.getActivityDetail(conn, 802);
+    expect(row).not.toBeNull();
+    expect(row!.category).toBe("running");
+    approx(row!.pace_min_km!, 6.0);
+    approx(row!.decoupling_pct!, 2.0);
+    const expectedZ2Min = (20.0 / 10.0) * 60 * 0.6;
+    approx(row!.z2_min!, expectedZ2Min, 0.1);
+  });
+});
+
+describe("nutritionLogsForActivity", () => {
+  it("returns empty when no logs exist for the activity", async () => {
+    await insertRun(803, "2026-03-01T07:00:00", 25.0, { movingTimeMin: 120.0 });
+    expect(await metrics.nutritionLogsForActivity(conn, 803)).toHaveLength(0);
+  });
+
+  it("only returns logs for the requested activity", async () => {
+    await insertRun(804, "2026-03-01T07:00:00", 25.0, { movingTimeMin: 120.0 });
+    await insertRun(805, "2026-03-05T07:00:00", 30.0, { movingTimeMin: 180.0 });
+    await addNutritionLog(conn, { activity_id: 804, logged_date: "2026-03-01", carbs_g: 120, sodium_mg: 1000 });
+    await addNutritionLog(conn, { activity_id: 805, logged_date: "2026-03-05", carbs_g: 210, sodium_mg: 1800 });
+
+    const rows = await metrics.nutritionLogsForActivity(conn, 804);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].carbs_g).toBe(120);
+    approx(rows[0].carbs_g_per_hour!, 60.0);
   });
 });

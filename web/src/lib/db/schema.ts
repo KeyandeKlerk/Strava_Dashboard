@@ -107,6 +107,23 @@ export const SCHEMA_STATEMENTS: readonly string[] = [
     riegel_factor DOUBLE,
     computed_at TIMESTAMP DEFAULT current_timestamp
   )`,
+  `CREATE TABLE IF NOT EXISTS nutrition_targets (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    target_carbs_g_per_hour DOUBLE NOT NULL,
+    target_sodium_mg_per_hour DOUBLE NOT NULL,
+    target_fluid_ml_per_hour DOUBLE,
+    updated_at TIMESTAMP DEFAULT current_timestamp
+  )`,
+  `CREATE SEQUENCE IF NOT EXISTS nutrition_logs_id_seq START 1`,
+  `CREATE TABLE IF NOT EXISTS nutrition_logs (
+    id INTEGER PRIMARY KEY DEFAULT nextval('nutrition_logs_id_seq'),
+    activity_id BIGINT NOT NULL,
+    logged_date DATE NOT NULL,
+    carbs_g DOUBLE NOT NULL,
+    sodium_mg DOUBLE NOT NULL,
+    fluid_ml DOUBLE,
+    notes VARCHAR
+  )`,
 ];
 
 export async function initSchema(run: (sql: string) => Promise<unknown>): Promise<void> {

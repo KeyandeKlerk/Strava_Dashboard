@@ -1,10 +1,12 @@
 import { getTodayPageData } from "@/lib/pageData";
 import { DailySessionList } from "@/components/DailySessionList";
+import { NutritionSection } from "@/components/NutritionSection";
 
 export const runtime = "nodejs";
 
 export default async function TodayPage() {
-  const { weekSummary, today, current, daily } = await getTodayPageData();
+  const { weekSummary, today, current, daily, nutritionTargets, nutritionLog, pickerActivities, fuelingProjection } =
+    await getTodayPageData();
 
   if (weekSummary.length === 0 || !current) {
     return (
@@ -14,6 +16,12 @@ export default async function TodayPage() {
           No plan loaded yet. Upload a CSV on the Plan &amp; History page or add a race on the
           Race Prep page.
         </p>
+        <NutritionSection
+          targets={nutritionTargets}
+          log={nutritionLog}
+          activities={pickerActivities}
+          projection={fuelingProjection}
+        />
       </div>
     );
   }
@@ -39,6 +47,12 @@ export default async function TodayPage() {
         today={today}
         weekStartDate={current.week_start_date}
         weekNumber={current.week_number}
+      />
+      <NutritionSection
+        targets={nutritionTargets}
+        log={nutritionLog}
+        activities={pickerActivities}
+        projection={fuelingProjection}
       />
     </div>
   );
