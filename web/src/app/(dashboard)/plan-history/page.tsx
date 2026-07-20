@@ -31,17 +31,18 @@ export default async function PlanHistoryPage() {
           <p className="mt-2 text-sm text-neutral-500">No runs ≥20 km yet.</p>
         ) : (
           <ShowMoreTable
-            rows={longRuns}
-            keyFn={(r) => `${r.activity_date}-${r.name}`}
-            columns={[
-              { header: "Date", cell: (r) => r.activity_date },
-              { header: "Name", cell: (r) => r.name },
-              { header: "km", cell: (r) => r.distance_km.toFixed(1) },
-              { header: "Pace", cell: (r) => fmtPace(r.pace_min_km) },
-              { header: "Gain (m)", cell: (r) => r.elevation_gain_m },
-              { header: "Avg HR", cell: (r) => r.avg_hr ?? "—" },
-              { header: "Decoupling %", cell: (r) => r.decoupling_pct ?? "—" },
-            ]}
+            headers={["Date", "Name", "km", "Pace", "Gain (m)", "Avg HR", "Decoupling %"]}
+            rows={longRuns.map((r) => (
+              <tr key={`${r.activity_date}-${r.name}`} className="border-t border-neutral-100 dark:border-neutral-900">
+                <td className="py-1 pr-2">{r.activity_date}</td>
+                <td className="py-1 pr-2">{r.name}</td>
+                <td className="py-1 pr-2">{r.distance_km.toFixed(1)}</td>
+                <td className="py-1 pr-2">{fmtPace(r.pace_min_km)}</td>
+                <td className="py-1 pr-2">{r.elevation_gain_m}</td>
+                <td className="py-1 pr-2">{r.avg_hr ?? "—"}</td>
+                <td className="py-1 pr-2">{r.decoupling_pct ?? "—"}</td>
+              </tr>
+            ))}
           />
         )}
       </div>
@@ -52,16 +53,17 @@ export default async function PlanHistoryPage() {
           <p className="mt-2 text-sm text-neutral-500">No activities to display.</p>
         ) : (
           <ShowMoreTable
-            rows={recent}
-            keyFn={(r) => `${r.date}-${r.name}`}
-            columns={[
-              { header: "Date", cell: (r) => r.date },
-              { header: "Name", cell: (r) => r.name },
-              { header: "Category", cell: (r) => r.category },
-              { header: "km", cell: (r) => r.distance_km ?? "—" },
-              { header: "Time (min)", cell: (r) => r.duration_min },
-              { header: "Load", cell: (r) => r.load_score },
-            ]}
+            headers={["Date", "Name", "Category", "km", "Time (min)", "Load"]}
+            rows={recent.map((r) => (
+              <tr key={`${r.date}-${r.name}`} className="border-t border-neutral-100 dark:border-neutral-900">
+                <td className="py-1 pr-2">{r.date}</td>
+                <td className="py-1 pr-2">{r.name}</td>
+                <td className="py-1 pr-2">{r.category}</td>
+                <td className="py-1 pr-2">{r.distance_km ?? "—"}</td>
+                <td className="py-1 pr-2">{r.duration_min}</td>
+                <td className="py-1 pr-2">{r.load_score}</td>
+              </tr>
+            ))}
           />
         )}
       </div>

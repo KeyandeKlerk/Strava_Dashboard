@@ -1,20 +1,16 @@
 "use client";
 import { useState, type ReactNode } from "react";
 
-export interface ShowMoreColumn<T> {
-  header: string;
-  cell: (row: T) => ReactNode;
-}
-
-export function ShowMoreTable<T>({
+// Rows must be pre-rendered <tr> elements (built by the server-component
+// caller), not raw data + a cell-render function — functions can't cross the
+// server/client boundary as props, only serializable data and React elements.
+export function ShowMoreTable({
+  headers,
   rows,
-  columns,
-  keyFn,
   initialCount = 5,
 }: {
-  rows: T[];
-  columns: Array<ShowMoreColumn<T>>;
-  keyFn: (row: T) => string;
+  headers: string[];
+  rows: ReactNode[];
   initialCount?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -25,24 +21,14 @@ export function ShowMoreTable<T>({
       <table className="w-full text-left text-xs">
         <thead>
           <tr className="text-neutral-500">
-            {columns.map((c) => (
-              <th key={c.header} className="py-1 pr-2">
-                {c.header}
+            {headers.map((h) => (
+              <th key={h} className="py-1 pr-2">
+                {h}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody>
-          {visible.map((row) => (
-            <tr key={keyFn(row)} className="border-t border-neutral-100 dark:border-neutral-900">
-              {columns.map((c) => (
-                <td key={c.header} className="py-1 pr-2">
-                  {c.cell(row)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
+        <tbody>{visible}</tbody>
       </table>
       {rows.length > initialCount && (
         <button
