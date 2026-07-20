@@ -25,6 +25,7 @@ import {
   planAdherence,
   projectedRaceFueling,
   recentActivities,
+  recentNiggleLogs,
   recentRunningActivitiesForPicker,
   runPaceTrend,
   shoeMileage,
@@ -39,7 +40,7 @@ import {
   TRAINING_END,
   TRAINING_START,
 } from "./metrics";
-import { BANDS, RACE_DISTANCE_KM } from "./shared";
+import { BANDS, RACE_DISTANCE_KM, computeReadiness, firstNonNull, flag } from "./shared";
 
 export const DASHBOARD_DATA_TAG = "dashboard-data";
 
@@ -59,13 +60,51 @@ export const getTodayPageData = unstable_cache(
   async () => {
     const conn = await getConnection();
     const weekSummary = await weeklyCompletionSummary(conn);
-    const [nutritionTargets, nutritionLog, pickerActivities, milestones] = await Promise.all([
-      getNutritionTargets(conn),
-      nutritionLogHistory(conn),
-      recentRunningActivitiesForPicker(conn),
-      comradesMilestones(conn),
-    ]);
+    const [nutritionTargets, nutritionLog, pickerActivities, milestones, acwr, ramp, mono, longPct, paceTrend] =
+      await Promise.all([
+        getNutritionTargets(conn),
+        nutritionLogHistory(conn),
+        recentRunningActivitiesForPicker(conn),
+        comradesMilestones(conn),
+        acwrHistory(conn),
+        weeklyRampRate(conn),
+        weeklyMonotony(conn),
+        longRunPct(conn),
+        runPaceTrend(conn),
+      ]);
     const fuelingProjection = projectedRaceFueling(milestones.projected_finish_h, nutritionTargets);
+
+    // Same "latest value" derivation and thresholds as fatigue/page.tsx's
+    // per-signal StatCards — rolled up into one worst-signal-wins verdict
+    // instead of five separate numbers the reader has to combine mentally.
+    const latestAcwr = firstNonNull(acwr, "acwr");
+    const latestRamp = firstNonNull(ramp, "ramp_pct");
+    const latestMono = firstNonNull(mono, "monotony");
+    const latestLongPct = firstNonNull(longPct, "long_run_pct");
+    const decoupled = paceTrend
+      .filter((r) => r.decoupling_pct != null)
+      .sort((a, b) => (a.activity_date < b.activity_date ? -1 : 1));
+    const latestDecoupling = decoupled.length > 0 ? decoupled[decoupled.length - 1].decoupling_pct : null;
+
+    const readiness = computeReadiness([
+      { label: "ACWR", flag: flag(latestAcwr, 0.8, 1.3), detail: latestAcwr != null ? latestAcwr.toFixed(2) : undefined },
+      {
+        label: "Ramp rate",
+        flag: flag(latestRamp, -10, 10),
+        detail: latestRamp != null ? `${latestRamp.toFixed(1)}%` : undefined,
+      },
+      { label: "Monotony", flag: flag(latestMono, 0, 1.5), detail: latestMono != null ? latestMono.toFixed(2) : undefined },
+      {
+        label: "Long run %",
+        flag: flag(latestLongPct, 0, 35),
+        detail: latestLongPct != null ? `${latestLongPct.toFixed(1)}%` : undefined,
+      },
+      {
+        label: "Decoupling",
+        flag: flag(latestDecoupling, -5, 5),
+        detail: latestDecoupling != null ? `${latestDecoupling.toFixed(1)}%` : undefined,
+      },
+    ]);
 
     if (weekSummary.length === 0) {
       return {
@@ -78,6 +117,7 @@ export const getTodayPageData = unstable_cache(
         pickerActivities,
         fuelingProjection,
         milestones,
+        readiness,
       };
     }
 
@@ -100,6 +140,7 @@ export const getTodayPageData = unstable_cache(
       pickerActivities,
       fuelingProjection,
       milestones,
+      readiness,
     };
   },
   ["today-page-data"],
@@ -109,7 +150,7 @@ export const getTodayPageData = unstable_cache(
 export const getFatiguePageData = unstable_cache(
   async () => {
     const conn = await getConnection();
-    const [tsb, ef, acwr, ramp, mono, longPct, b2b] = await Promise.all([
+    const [tsb, ef, acwr, ramp, mono, longPct, b2b, niggles] = await Promise.all([
       ctlAtlTsbHistory(conn, TRAINING_START ?? undefined, TRAINING_END ?? undefined),
       weeklyEfficiencyFactor(conn),
       acwrHistory(conn),
@@ -117,9 +158,10 @@ export const getFatiguePageData = unstable_cache(
       weeklyMonotony(conn),
       longRunPct(conn),
       backToBackRuns(conn, 15.0),
+      recentNiggleLogs(conn),
     ]);
     const paceTrend = await runPaceTrend(conn);
-    return { tsb, ef, acwr, ramp, mono, longPct, b2b, paceTrend };
+    return { tsb, ef, acwr, ramp, mono, longPct, b2b, paceTrend, niggles };
   },
   ["fatigue-page-data"],
   { tags: [DASHBOARD_DATA_TAG] },

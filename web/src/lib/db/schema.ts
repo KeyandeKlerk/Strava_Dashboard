@@ -124,6 +124,15 @@ export const SCHEMA_STATEMENTS: readonly string[] = [
     fluid_ml DOUBLE,
     notes VARCHAR
   )`,
+  `CREATE SEQUENCE IF NOT EXISTS niggle_logs_id_seq START 1`,
+  `CREATE TABLE IF NOT EXISTS niggle_logs (
+    id INTEGER PRIMARY KEY DEFAULT nextval('niggle_logs_id_seq'),
+    activity_id BIGINT NOT NULL,
+    logged_date DATE NOT NULL,
+    body_part VARCHAR NOT NULL,
+    severity INTEGER NOT NULL,
+    notes VARCHAR
+  )`,
 ];
 
 export async function initSchema(run: (sql: string) => Promise<unknown>): Promise<void> {

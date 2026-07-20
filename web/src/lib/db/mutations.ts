@@ -518,6 +518,35 @@ export async function deleteNutritionLog(conn: DuckDBConnection, id: number): Pr
   await conn.run("DELETE FROM nutrition_logs WHERE id = $id", { id });
 }
 
+export interface NiggleLogInput {
+  activity_id: number;
+  logged_date: string;
+  body_part: string;
+  severity: number;
+  notes?: string | null;
+}
+
+export async function addNiggleLog(conn: DuckDBConnection, entry: NiggleLogInput): Promise<number> {
+  const row = await queryRow<{ id: number }>(
+    conn,
+    `INSERT INTO niggle_logs (activity_id, logged_date, body_part, severity, notes)
+     VALUES ($activity_id, $logged_date, $body_part, $severity, $notes)
+     RETURNING id`,
+    {
+      activity_id: entry.activity_id,
+      logged_date: entry.logged_date,
+      body_part: entry.body_part,
+      severity: entry.severity,
+      notes: entry.notes ?? null,
+    },
+  );
+  return Number(row?.id);
+}
+
+export async function deleteNiggleLog(conn: DuckDBConnection, id: number): Promise<void> {
+  await conn.run("DELETE FROM niggle_logs WHERE id = $id", { id });
+}
+
 export async function getAllRaceEvents<T = Record<string, unknown>>(conn: DuckDBConnection) {
   return queryRows<T>(
     conn,

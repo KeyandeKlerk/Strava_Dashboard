@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { getWorkoutDetailAction, type WorkoutDetail } from "@/lib/workoutActions";
+import { useEffect, useState, useTransition } from "react";
+import { getWorkoutDetailAction, logNiggleAction, type WorkoutDetail } from "@/lib/workoutActions";
 import { fmtPace } from "@/lib/shared";
 import type { ActivityDetailRow } from "@/lib/metrics";
 import { StatCard } from "@/components/StatCard";
@@ -13,8 +13,24 @@ const ZONE_LABELS: Array<[keyof ActivityDetailRow, string]> = [
   ["z5_min", "Z5"],
 ] as const;
 
+const BODY_PARTS: Array<[string, string]> = [
+  ["knee_itb", "Knee / ITB"],
+  ["calf", "Calf"],
+  ["achilles", "Achilles"],
+  ["hip", "Hip"],
+  ["foot_ankle", "Foot / Ankle"],
+  ["back", "Back"],
+  ["hamstring", "Hamstring"],
+  ["other", "Other"],
+];
+
+const FIELD_CLASS =
+  "w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900";
+
 export function WorkoutDetailSheet({ activityId, onClose }: { activityId: number; onClose: () => void }) {
   const [detail, setDetail] = useState<WorkoutDetail | null | undefined>(undefined);
+  const [niggleError, setNiggleError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     let cancelled = false;
@@ -25,6 +41,21 @@ export function WorkoutDetailSheet({ activityId, onClose }: { activityId: number
       cancelled = true;
     };
   }, [activityId]);
+
+  function handleLogNiggle(formData: FormData) {
+    setNiggleError(null);
+    startTransition(async () => {
+      const result = await logNiggleAction(activityId, formData);
+      if (result.error) {
+        setNiggleError(result.error);
+        return;
+      }
+      // Not part of server-rendered page props (fetched client-side on
+      // open), so a plain page revalidation wouldn't refresh this sheet —
+      // re-invoke the same fetch directly instead.
+      getWorkoutDetailAction(activityId).then(setDetail);
+    });
+  }
 
   const isRunning = detail?.activity.category === "running";
   const hasZoneData = detail?.activity.z1_min != null;
@@ -103,6 +134,47 @@ export function WorkoutDetailSheet({ activityId, onClose }: { activityId: number
                 ))}
               </div>
             )}
+
+            {detail.niggleLogs.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs font-medium text-neutral-500">Niggles</p>
+                {detail.niggleLogs.map((log) => (
+                  <p key={log.id} className="mt-1 text-sm">
+                    {BODY_PARTS.find(([key]) => key === log.body_part)?.[1] ?? log.body_part} — severity {log.severity}/5
+                    {log.notes && ` — ${log.notes}`}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            <details className="mt-3">
+              <summary className="cursor-pointer text-xs font-medium text-neutral-500">Log a niggle</summary>
+              <form action={handleLogNiggle} className="mt-2 space-y-2">
+                <select name="body_part" required className={FIELD_CLASS}>
+                  {BODY_PARTS.map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <select name="severity" required defaultValue={2} className={FIELD_CLASS}>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>
+                      {n} {n === 1 ? "— barely noticeable" : n === 5 ? "— severe" : ""}
+                    </option>
+                  ))}
+                </select>
+                <input name="notes" placeholder="Notes (optional)" className={FIELD_CLASS} />
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="w-full rounded-md bg-neutral-900 px-3 py-2 text-sm text-white dark:bg-neutral-100 dark:text-neutral-900"
+                >
+                  Save
+                </button>
+                {niggleError && <p className="text-xs text-red-600">{niggleError}</p>}
+              </form>
+            </details>
           </>
         )}
 

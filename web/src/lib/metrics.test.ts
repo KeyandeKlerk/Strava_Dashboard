@@ -13,6 +13,7 @@ import {
   addDailySession,
   upsertNutritionTargets,
   addNutritionLog,
+  addNiggleLog,
 } from "./db/mutations";
 import * as metrics from "./metrics";
 
@@ -677,5 +678,44 @@ describe("nutritionLogsForActivity", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].carbs_g).toBe(120);
     approx(rows[0].carbs_g_per_hour!, 60.0);
+  });
+});
+
+describe("niggleLogsForActivity", () => {
+  it("returns empty when no logs exist for the activity", async () => {
+    await insertRun(901, "2026-03-01T07:00:00", 25.0);
+    expect(await metrics.niggleLogsForActivity(conn, 901)).toHaveLength(0);
+  });
+
+  it("only returns logs for the requested activity", async () => {
+    await insertRun(902, "2026-03-01T07:00:00", 25.0);
+    await insertRun(903, "2026-03-05T07:00:00", 30.0);
+    await addNiggleLog(conn, { activity_id: 902, logged_date: "2026-03-01", body_part: "knee_itb", severity: 3 });
+    await addNiggleLog(conn, { activity_id: 903, logged_date: "2026-03-05", body_part: "calf", severity: 2 });
+
+    const rows = await metrics.niggleLogsForActivity(conn, 902);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].body_part).toBe("knee_itb");
+    expect(rows[0].severity).toBe(3);
+  });
+});
+
+describe("recentNiggleLogs", () => {
+  it("returns empty when none logged", async () => {
+    expect(await metrics.recentNiggleLogs(conn)).toHaveLength(0);
+  });
+
+  it("returns most-recent-first, capped at the limit", async () => {
+    await insertRun(904, "2026-03-01T07:00:00", 25.0);
+    await insertRun(905, "2026-03-05T07:00:00", 25.0);
+    await insertRun(906, "2026-03-10T07:00:00", 25.0);
+    await addNiggleLog(conn, { activity_id: 904, logged_date: "2026-03-01", body_part: "hip", severity: 1 });
+    await addNiggleLog(conn, { activity_id: 905, logged_date: "2026-03-05", body_part: "back", severity: 2 });
+    await addNiggleLog(conn, { activity_id: 906, logged_date: "2026-03-10", body_part: "achilles", severity: 4 });
+
+    const rows = await metrics.recentNiggleLogs(conn, 2);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].body_part).toBe("achilles");
+    expect(rows[1].body_part).toBe("back");
   });
 });

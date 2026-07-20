@@ -1,4 +1,5 @@
 import { BottomNav } from "@/components/BottomNav";
+import { SyncButton } from "@/components/SyncButton";
 import { getConnection } from "@/lib/db/client";
 import { getLastSynced } from "@/lib/db/mutations";
 
@@ -21,8 +22,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <div className="mx-auto w-full max-w-3xl px-4 pt-2 text-right text-xs text-neutral-400">
-        {lastSynced != null ? `Last synced ${formatLastSynced(lastSynced)}` : "Not synced yet"}
+      <div className="mx-auto flex w-full max-w-3xl items-center justify-end gap-2 px-4 pt-2 text-right text-xs text-neutral-400">
+        <span>{lastSynced != null ? `Last synced ${formatLastSynced(lastSynced)}` : "Not synced yet"}</span>
+        <span aria-hidden="true">·</span>
+        <SyncButton />
       </div>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-24 pt-2">{children}</main>
       <BottomNav />

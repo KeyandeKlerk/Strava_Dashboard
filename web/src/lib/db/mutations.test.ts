@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createTestConnection } from "./testHelper";
 import {
   addDailySession,
+  addNiggleLog,
   addNutritionLog,
   deleteDailySession,
+  deleteNiggleLog,
   deleteNutritionLog,
   moveDailySession,
   queryPlanDay,
@@ -195,6 +197,39 @@ describe("addNutritionLog / deleteNutritionLog", () => {
     await deleteNutritionLog(conn, id);
 
     const row = await queryRow(conn, "SELECT id FROM nutrition_logs WHERE id = $id", { id });
+    expect(row).toBeUndefined();
+  });
+});
+
+describe("addNiggleLog / deleteNiggleLog", () => {
+  it("adds a log entry tied to an activity and returns its id", async () => {
+    await upsertActivity(conn, { id: 601, name: "Long run", category: "running", start_date_local: "2026-03-01T07:00:00", moving_time_min: 180 });
+
+    const id = await addNiggleLog(conn, {
+      activity_id: 601,
+      logged_date: "2026-03-01",
+      body_part: "knee_itb",
+      severity: 3,
+      notes: "Twinge at 15km",
+    });
+
+    const row = await queryRow<{ activity_id: number; body_part: string; severity: number }>(
+      conn,
+      "SELECT activity_id, body_part, severity FROM niggle_logs WHERE id = $id",
+      { id },
+    );
+    expect(row?.activity_id).toBe(601);
+    expect(row?.body_part).toBe("knee_itb");
+    expect(row?.severity).toBe(3);
+  });
+
+  it("removes a log entry", async () => {
+    await upsertActivity(conn, { id: 602, name: "Long run", category: "running", start_date_local: "2026-03-01T07:00:00", moving_time_min: 180 });
+    const id = await addNiggleLog(conn, { activity_id: 602, logged_date: "2026-03-01", body_part: "calf", severity: 2 });
+
+    await deleteNiggleLog(conn, id);
+
+    const row = await queryRow(conn, "SELECT id FROM niggle_logs WHERE id = $id", { id });
     expect(row).toBeUndefined();
   });
 });

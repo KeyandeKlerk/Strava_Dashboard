@@ -1042,6 +1042,50 @@ export async function nutritionLogsForActivity(conn: DuckDBConnection, activityI
   );
 }
 
+export interface NiggleLogRow {
+  id: number;
+  activity_date: string;
+  activity_name: string;
+  body_part: string;
+  severity: number;
+  notes: string | null;
+}
+
+export async function niggleLogsForActivity(conn: DuckDBConnection, activityId: number): Promise<NiggleLogRow[]> {
+  return queryRows<NiggleLogRow>(
+    conn,
+    `SELECT
+        n.id,
+        a.start_date_local::DATE::VARCHAR AS activity_date,
+        a.name AS activity_name,
+        n.body_part,
+        n.severity,
+        n.notes
+     FROM niggle_logs n
+     JOIN activities a ON a.id = n.activity_id
+     WHERE n.activity_id = $activity_id
+     ORDER BY n.id`,
+    { activity_id: activityId },
+  );
+}
+
+export async function recentNiggleLogs(conn: DuckDBConnection, limit = 5): Promise<NiggleLogRow[]> {
+  return queryRows<NiggleLogRow>(
+    conn,
+    `SELECT
+        n.id,
+        a.start_date_local::DATE::VARCHAR AS activity_date,
+        a.name AS activity_name,
+        n.body_part,
+        n.severity,
+        n.notes
+     FROM niggle_logs n
+     JOIN activities a ON a.id = n.activity_id
+     ORDER BY a.start_date_local DESC
+     LIMIT ${limit}`,
+  );
+}
+
 export interface RunningActivityOption {
   id: number;
   activity_date: string;

@@ -1,5 +1,5 @@
 import { getFatiguePageData } from "@/lib/pageData";
-import { flag } from "@/lib/shared";
+import { firstNonNull, flag } from "@/lib/shared";
 import { StatCard } from "@/components/StatCard";
 import { ChartCard } from "@/components/charts/ChartCard";
 import {
@@ -13,11 +13,6 @@ import {
 
 export const runtime = "nodejs";
 
-function firstNonNull<T, K extends keyof T>(rows: T[], key: K): T[K] | null {
-  for (const row of rows) if (row[key] != null) return row[key];
-  return null;
-}
-
 // Isolated from the component body: this is a per-request Server Component
 // (force-dynamic), so wall-clock time here is intentional, not a purity bug —
 // factoring it out just satisfies the linter's static "no Date.now() in
@@ -27,7 +22,7 @@ function fourWeeksAgoMs(): number {
 }
 
 export default async function FatiguePage() {
-  const { tsb, ef, acwr, ramp, mono, longPct, b2b, paceTrend } = await getFatiguePageData();
+  const { tsb, ef, acwr, ramp, mono, longPct, b2b, paceTrend, niggles } = await getFatiguePageData();
 
   const latestTsb = tsb.length > 0 ? tsb[tsb.length - 1].tsb : null;
   const efSorted = [...ef].sort((a, b) => (a.week_start < b.week_start ? -1 : 1));
@@ -149,6 +144,17 @@ export default async function FatiguePage() {
             flag={b2bFlagColor}
           />
         </div>
+        {niggles.length > 0 && (
+          <div className="mt-3">
+            <p className="text-xs font-medium text-neutral-500">Recent Niggles</p>
+            {niggles.map((n) => (
+              <p key={n.id} className="mt-1 text-sm">
+                {n.activity_date} — {n.body_part.replace(/_/g, " ")} (severity {n.severity}/5)
+                {n.notes && ` — ${n.notes}`}
+              </p>
+            ))}
+          </div>
+        )}
       </div>
 
       <div>

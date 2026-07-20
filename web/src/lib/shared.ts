@@ -70,6 +70,39 @@ export const FLAG_EMOJI: Record<Flag, string> = {
   gray: "⚪",
 };
 
+// Rows come back most-recent-first from every acwr/ramp/monotony/longPct
+// query in metrics.ts — this finds the latest non-null value in that order.
+export function firstNonNull<T, K extends keyof T>(rows: T[], key: K): T[K] | null {
+  for (const row of rows) if (row[key] != null) return row[key];
+  return null;
+}
+
+export interface ReadinessSignal {
+  label: string;
+  flag: Flag;
+  detail?: string;
+}
+
+export interface ReadinessResult {
+  verdict: Flag;
+  reasons: string[];
+}
+
+// Worst-signal-wins: a single red flag (e.g. ACWR spiking) shouldn't be
+// averaged away by four green ones — training-load safety signals should
+// only ever get more cautious, never less, when combined.
+export function computeReadiness(signals: ReadinessSignal[]): ReadinessResult {
+  const reds = signals.filter((s) => s.flag === "red");
+  const yellows = signals.filter((s) => s.flag === "yellow");
+  const nonGray = signals.filter((s) => s.flag !== "gray");
+
+  const verdict: Flag = reds.length > 0 ? "red" : yellows.length > 0 ? "yellow" : nonGray.length > 0 ? "green" : "gray";
+  const culprits = verdict === "red" ? reds : verdict === "yellow" ? yellows : [];
+  const reasons = culprits.map((s) => (s.detail ? `${s.label} (${s.detail})` : s.label));
+
+  return { verdict, reasons };
+}
+
 export function weekLabel(row: {
   week_number: number;
   week_start_date: string;

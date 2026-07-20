@@ -2,6 +2,8 @@ import { getTodayPageData } from "@/lib/pageData";
 import { DailySessionList } from "@/components/DailySessionList";
 import { NutritionSection } from "@/components/NutritionSection";
 import { StatCard } from "@/components/StatCard";
+import { ReadinessBanner } from "@/components/ReadinessBanner";
+import { TaperChecklist } from "@/components/TaperChecklist";
 
 export const runtime = "nodejs";
 
@@ -16,12 +18,14 @@ export default async function TodayPage() {
     pickerActivities,
     fuelingProjection,
     milestones,
+    readiness,
   } = await getTodayPageData();
 
   if (weekSummary.length === 0 || !current) {
     return (
       <div>
         <h1 className="text-lg font-semibold">This Week&apos;s Plan</h1>
+        <ReadinessBanner verdict={readiness.verdict} reasons={readiness.reasons} />
         <p className="mt-2 text-sm text-neutral-500">
           No plan loaded yet. Upload a CSV on the Plan &amp; History page or add a race on the
           Race Prep page.
@@ -41,6 +45,7 @@ export default async function TodayPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold">This Week&apos;s Plan</h1>
+      <ReadinessBanner verdict={readiness.verdict} reasons={readiness.reasons} />
       <div className="grid grid-cols-2 gap-2">
         <StatCard label="Week Phase" value={current.phase} caption={current.is_deload ? "Deload week" : "Build week"} />
         <StatCard
@@ -49,6 +54,7 @@ export default async function TodayPage() {
           caption={`Cutoff ${milestones.cutoff_h.toFixed(0)}h`}
         />
       </div>
+      {(current.phase === "Taper" || current.phase === "Race Week") && <TaperChecklist />}
       <div>
         <div className="h-3 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
           <div
