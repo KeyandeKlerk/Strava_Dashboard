@@ -44,7 +44,7 @@ async function main() {
   await conn.run("CREATE SEQUENCE IF NOT EXISTS md.nutrition_logs_id_seq START 1");
   await conn.run(`
     CREATE TABLE IF NOT EXISTS md.nutrition_logs (
-      id INTEGER PRIMARY KEY DEFAULT nextval('md.nutrition_logs_id_seq'),
+      id INTEGER PRIMARY KEY DEFAULT nextval('nutrition_logs_id_seq'),
       activity_id BIGINT NOT NULL,
       logged_date DATE NOT NULL,
       carbs_g DOUBLE NOT NULL,
