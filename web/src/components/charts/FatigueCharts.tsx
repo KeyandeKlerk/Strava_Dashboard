@@ -65,7 +65,7 @@ export function AcwrChart({ data }: { data: AcwrRow[] }) {
 }
 
 export function RampRateChart({ data }: { data: RampRateRow[] }) {
-  const recent = data.filter((r) => r.ramp_pct != null).slice(0, 112);
+  const recent = data.filter((r) => r.ramp_pct != null).slice(-112);
   return (
     <ResponsiveContainer width="100%" height={220}>
       <ComposedChart data={recent} margin={CHART_MARGIN}>
@@ -82,7 +82,7 @@ export function RampRateChart({ data }: { data: RampRateRow[] }) {
 }
 
 export function MonotonyChart({ data }: { data: MonotonyRow[] }) {
-  const recent = data.filter((r) => r.monotony != null).slice(0, 112);
+  const recent = data.filter((r) => r.monotony != null).slice(-112);
   return (
     <ResponsiveContainer width="100%" height={200}>
       <ComposedChart data={recent} margin={CHART_MARGIN}>
@@ -97,7 +97,7 @@ export function MonotonyChart({ data }: { data: MonotonyRow[] }) {
 }
 
 export function StrainChart({ data }: { data: MonotonyRow[] }) {
-  const recent = data.filter((r) => r.monotony != null).slice(0, 112);
+  const recent = data.filter((r) => r.monotony != null).slice(-112);
   return (
     <ResponsiveContainer width="100%" height={200}>
       <ComposedChart data={recent} margin={CHART_MARGIN}>
