@@ -7,11 +7,11 @@
 // keeps serving the last-known-good data until the next successful sync.
 import { unstable_cache } from "next/cache";
 import { getConnection, queryRow } from "./db/client";
-import { getAllRaceEvents } from "./db/mutations";
+import { getAllRaceEvents, getPrimaryGoalRace } from "./db/mutations";
 import {
   acwrHistory,
   backToBackRuns,
-  comradesMilestones,
+  bestRecentEffort,
   comradesProjectedSplits,
   COMRADES_CHECKPOINTS,
   ctlAtlTsbHistory,
@@ -24,6 +24,7 @@ import {
   nutritionLogHistory,
   planAdherence,
   projectedRaceFueling,
+  raceMilestones,
   recentActivities,
   recentNiggleLogs,
   recentRunningActivitiesForPicker,
@@ -40,13 +41,36 @@ import {
   TRAINING_END,
   TRAINING_START,
 } from "./metrics";
-import { BANDS, RACE_DISTANCE_KM, computeReadiness, firstNonNull, flag } from "./shared";
+import {
+  BANDS,
+  computeReadiness,
+  computeTrainingStatus,
+  danielsVo2max,
+  firstNonNull,
+  flag,
+  latestCompleteDay,
+  riegelPredict,
+  todayIso,
+} from "./shared";
+
+interface GoalRaceRow {
+  id: number;
+  name: string;
+  race_date: string;
+  distance_km: number;
+  priority: string;
+  target_finish_h: number | null;
+  notes: string | null;
+  strava_activity_id: number | null;
+  terrain_factor: number | null;
+  cutoff_h: number | null;
+}
+
+function isComradesRace(goalRace: GoalRaceRow | undefined): boolean {
+  return goalRace ? goalRace.name.toLowerCase().includes("comrades") : false;
+}
 
 export const DASHBOARD_DATA_TAG = "dashboard-data";
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function rollingAvg(values: number[], window: number): Array<number | null> {
   return values.map((_, i) => {
@@ -60,26 +84,35 @@ export const getTodayPageData = unstable_cache(
   async () => {
     const conn = await getConnection();
     const weekSummary = await weeklyCompletionSummary(conn);
-    const [nutritionTargets, nutritionLog, pickerActivities, milestones, acwr, ramp, mono, longPct, paceTrend] =
+    const [nutritionTargets, nutritionLog, pickerActivities, goalRace, acwr, ramp, mono, longPct, paceTrend] =
       await Promise.all([
         getNutritionTargets(conn),
         nutritionLogHistory(conn),
         recentRunningActivitiesForPicker(conn),
-        comradesMilestones(conn),
+        getPrimaryGoalRace<GoalRaceRow>(conn),
         acwrHistory(conn),
         weeklyRampRate(conn),
         weeklyMonotony(conn),
         longRunPct(conn),
         runPaceTrend(conn),
       ]);
-    const fuelingProjection = projectedRaceFueling(milestones.projected_finish_h, nutritionTargets);
+    const milestones = goalRace
+      ? await raceMilestones(conn, goalRace.distance_km, goalRace.cutoff_h, isComradesRace(goalRace) ? 1800 : undefined)
+      : null;
+    const fuelingProjection = milestones ? projectedRaceFueling(milestones.projected_finish_h, nutritionTargets) : null;
+    const today = todayIso();
 
     // Same "latest value" derivation and thresholds as fatigue/page.tsx's
     // per-signal StatCards — rolled up into one worst-signal-wins verdict
     // instead of five separate numbers the reader has to combine mentally.
-    const latestAcwr = firstNonNull(acwr, "acwr");
+    // ACWR/monotony are anchored to the last fully-elapsed day, not today —
+    // today's row only reflects however much of today has happened so far
+    // (0km before you've run), which would otherwise read as a false dip.
+    // Ramp is a calendar-week metric whose in-progress week already
+    // substitutes the plan's target distance, so it needs no such anchor.
+    const latestAcwr = latestCompleteDay(acwr, "acwr", today);
     const latestRamp = firstNonNull(ramp, "ramp_pct");
-    const latestMono = firstNonNull(mono, "monotony");
+    const latestMono = latestCompleteDay(mono, "monotony", today);
     const latestLongPct = firstNonNull(longPct, "long_run_pct");
     const decoupled = paceTrend
       .filter((r) => r.decoupling_pct != null)
@@ -87,29 +120,42 @@ export const getTodayPageData = unstable_cache(
     const latestDecoupling = decoupled.length > 0 ? decoupled[decoupled.length - 1].decoupling_pct : null;
 
     const readiness = computeReadiness([
-      { label: "ACWR", flag: flag(latestAcwr, 0.8, 1.3), detail: latestAcwr != null ? latestAcwr.toFixed(2) : undefined },
+      {
+        label: "ACWR",
+        flag: flag(latestAcwr, 0.8, 1.3),
+        detail: latestAcwr != null ? latestAcwr.toFixed(2) : undefined,
+        range: "0.8–1.3 safe zone",
+      },
       {
         label: "Ramp rate",
         flag: flag(latestRamp, -10, 10),
         detail: latestRamp != null ? `${latestRamp.toFixed(1)}%` : undefined,
+        range: "±10% guardrail",
       },
-      { label: "Monotony", flag: flag(latestMono, 0, 1.5), detail: latestMono != null ? latestMono.toFixed(2) : undefined },
+      {
+        label: "Monotony",
+        flag: flag(latestMono, 0, 1.5),
+        detail: latestMono != null ? latestMono.toFixed(2) : undefined,
+        range: "0–1.5 target",
+      },
       {
         label: "Long run %",
         flag: flag(latestLongPct, 0, 35),
         detail: latestLongPct != null ? `${latestLongPct.toFixed(1)}%` : undefined,
+        range: "≤35% target",
       },
       {
         label: "Decoupling",
         flag: flag(latestDecoupling, -5, 5),
         detail: latestDecoupling != null ? `${latestDecoupling.toFixed(1)}%` : undefined,
+        range: "±5% target",
       },
     ]);
 
     if (weekSummary.length === 0) {
       return {
         weekSummary,
-        today: todayIso(),
+        today,
         current: null,
         daily: [] as Awaited<ReturnType<typeof dailyPlanForWeek>>,
         nutritionTargets,
@@ -121,7 +167,6 @@ export const getTodayPageData = unstable_cache(
       };
     }
 
-    const today = todayIso();
     const current =
       weekSummary.find((w) => {
         const start = w.week_start_date;
@@ -150,7 +195,7 @@ export const getTodayPageData = unstable_cache(
 export const getFatiguePageData = unstable_cache(
   async () => {
     const conn = await getConnection();
-    const [tsb, ef, acwr, ramp, mono, longPct, b2b, niggles] = await Promise.all([
+    const [tsb, ef, acwr, ramp, mono, longPct, b2b, niggles, bestEffort] = await Promise.all([
       ctlAtlTsbHistory(conn, TRAINING_START ?? undefined, TRAINING_END ?? undefined),
       weeklyEfficiencyFactor(conn),
       acwrHistory(conn),
@@ -159,9 +204,26 @@ export const getFatiguePageData = unstable_cache(
       longRunPct(conn),
       backToBackRuns(conn, 15.0),
       recentNiggleLogs(conn),
+      bestRecentEffort(conn),
     ]);
     const paceTrend = await runPaceTrend(conn);
-    return { tsb, ef, acwr, ramp, mono, longPct, b2b, paceTrend, niggles };
+
+    const vo2max = bestEffort ? danielsVo2max(bestEffort.distance_km, bestEffort.moving_time_min) : null;
+
+    // Training status: CTL "now" vs ~28 days back in the same ascending
+    // series, same worst-case-first philosophy as the readiness verdict.
+    const today = todayIso();
+    const latestCtlRow = tsb.length > 0 ? tsb[tsb.length - 1] : null;
+    const ctlPast = tsb.length > 0 ? tsb[Math.max(0, tsb.length - 1 - 28)].ctl : null;
+    const trainingStatus = computeTrainingStatus({
+      ctlNow: latestCtlRow?.ctl ?? null,
+      ctlPast,
+      tsb: latestCtlRow?.tsb ?? null,
+      acwr: latestCompleteDay(acwr, "acwr", today),
+      rampPct: firstNonNull(ramp, "ramp_pct"),
+    });
+
+    return { tsb, ef, acwr, ramp, mono, longPct, b2b, paceTrend, niggles, vo2max, trainingStatus };
   },
   ["fatigue-page-data"],
   { tags: [DASHBOARD_DATA_TAG] },
@@ -170,12 +232,14 @@ export const getFatiguePageData = unstable_cache(
 export const getTrainingLoadPageData = unstable_cache(
   async () => {
     const conn = await getConnection();
-    const [volume, adherence, monthly, categoryLoad] = await Promise.all([
+    const [volume, adherence, monthly, categoryLoad, goalRace] = await Promise.all([
       weeklyVolume(conn),
       planAdherence(conn),
       monthlyVolume(conn),
       weeklyCategoryLoad(conn),
+      getPrimaryGoalRace<GoalRaceRow>(conn),
     ]);
+    const goalRaceDistanceKm = goalRace?.distance_km ?? null;
 
     const volSorted = [...volume].sort((a, b) => (a.week_start < b.week_start ? -1 : 1));
     const rolling = rollingAvg(volSorted.map((v) => v.run_distance_km), 4);
@@ -194,7 +258,7 @@ export const getTrainingLoadPageData = unstable_cache(
     const monthlySorted = [...monthly].sort((a, b) => (a.month_start < b.month_start ? -1 : 1));
     const categorySorted = [...categoryLoad].sort((a, b) => (a.week_start < b.week_start ? -1 : 1));
 
-    return { volume, distanceData, timeData, longRunData, monthlySorted, categorySorted };
+    return { volume, distanceData, timeData, longRunData, monthlySorted, categorySorted, goalRaceDistanceKm };
   },
   ["training-load-page-data"],
   { tags: [DASHBOARD_DATA_TAG] },
@@ -264,48 +328,92 @@ export const getRacePrepPageData = unstable_cache(
       target_finish_h: number | null;
       notes: string | null;
       strava_activity_id: number | null;
+      terrain_factor: number | null;
+      cutoff_h: number | null;
     }
-    const [races, milestones, b2b, elevation, splits, shoes] = await Promise.all([
+    const [races, goalRace, b2b, elevation, splits, shoes, bestEffort] = await Promise.all([
       getAllRaceEvents<RaceEventRow>(conn),
-      comradesMilestones(conn, RACE_DISTANCE_KM),
+      getPrimaryGoalRace<GoalRaceRow>(conn),
       backToBackRuns(conn),
       weeklyElevation(conn),
       comradesProjectedSplits(conn),
       shoeMileage(conn),
+      bestRecentEffort(conn),
     ]);
+    const isComrades = isComradesRace(goalRace);
+    const milestones = goalRace
+      ? await raceMilestones(conn, goalRace.distance_km, goalRace.cutoff_h, isComrades ? 1800 : undefined)
+      : null;
+
+    // Generic multi-distance predictor — same Riegel model already used for
+    // the Comrades projection, applied to a standard distance set plus the
+    // goal race's own distance (if it isn't already one of those four).
+    const predictionDistances: Array<[string, number]> = [
+      ["5K", 5.0],
+      ["10K", 10.0],
+      ["Half Marathon", 21.0975],
+      ["Marathon", 42.195],
+    ];
+    if (goalRace && !predictionDistances.some(([, km]) => Math.abs(km - goalRace.distance_km) < 0.5)) {
+      predictionDistances.push([goalRace.name, goalRace.distance_km]);
+    }
+    const predictedTimes = bestEffort
+      ? predictionDistances.map(([label, km]) => ({
+          label,
+          distance_km: km,
+          predicted_min: riegelPredict(bestEffort.distance_km, bestEffort.moving_time_min, km),
+        }))
+      : [];
 
     const today = todayIso();
     const analysed = races.filter((r) => r.strava_activity_id);
     const analyses = await Promise.all(
       analysed.map((r) =>
-        queryRow<{ avg_pace_min_km: number | null; comrades_projection_h: number | null; computed_at: string }>(
+        queryRow<{ avg_pace_min_km: number | null; projected_finish_h: number | null; computed_at: string }>(
           conn,
-          `SELECT avg_pace_min_km, comrades_projection_h::VARCHAR AS comrades_projection_h, computed_at::VARCHAR AS computed_at
+          `SELECT avg_pace_min_km, projected_finish_h::VARCHAR AS projected_finish_h, computed_at::VARCHAR AS computed_at
            FROM race_analysis WHERE race_event_id = $id`,
           { id: r.id },
         ),
       ),
     );
 
+    // Comrades-only bonus content — named checkpoints/medal tiers are a
+    // specific course's data, not generic; the page only renders these
+    // sections when the goal race actually is Comrades (isComrades).
     const elevationProfile = COMRADES_CHECKPOINTS.map(([checkpoint, km, elevation_m]) => ({
       checkpoint,
       km,
       elevation_m,
     }));
 
-    const bandRows = BANDS.reduce<Array<{ medal: string; label: string; onTrack: boolean }>>(
-      (rows, [medal, label, cutoffH]) => {
-        const prevH = rows.length > 0 ? BANDS[rows.length - 1][2] : 0;
-        const onTrack =
-          milestones.projected_finish_h != null &&
-          prevH <= milestones.projected_finish_h &&
-          milestones.projected_finish_h < cutoffH;
-        return [...rows, { medal, label, onTrack }];
-      },
-      [],
-    );
+    const bandRows = milestones
+      ? BANDS.reduce<Array<{ medal: string; label: string; onTrack: boolean }>>((rows, [medal, label, cutoffH]) => {
+          const prevH = rows.length > 0 ? BANDS[rows.length - 1][2] : 0;
+          const onTrack =
+            milestones.projected_finish_h != null &&
+            prevH <= milestones.projected_finish_h &&
+            milestones.projected_finish_h < cutoffH;
+          return [...rows, { medal, label, onTrack }];
+        }, [])
+      : [];
 
-    return { races, milestones, b2b, elevation, splits, shoes, today, analysed, analyses, elevationProfile, bandRows };
+    return {
+      races,
+      goalRace,
+      isComrades,
+      milestones,
+      b2b,
+      elevation,
+      splits,
+      shoes,
+      today,
+      analysed,
+      analyses,
+      elevationProfile,
+      bandRows,
+      predictedTimes,
+    };
   },
   ["race-prep-page-data"],
   { tags: [DASHBOARD_DATA_TAG] },

@@ -78,7 +78,9 @@ export const SCHEMA_STATEMENTS: readonly string[] = [
     priority VARCHAR NOT NULL,
     target_finish_h DOUBLE,
     notes VARCHAR,
-    strava_activity_id BIGINT
+    strava_activity_id BIGINT,
+    terrain_factor DOUBLE DEFAULT 1.0,
+    cutoff_h DOUBLE
   )`,
   `CREATE SEQUENCE IF NOT EXISTS training_blocks_id_seq START 1`,
   `CREATE TABLE IF NOT EXISTS training_blocks (
@@ -103,7 +105,7 @@ export const SCHEMA_STATEMENTS: readonly string[] = [
     race_event_id INTEGER PRIMARY KEY,
     activity_id BIGINT NOT NULL,
     avg_pace_min_km DOUBLE,
-    comrades_projection_h DOUBLE,
+    projected_finish_h DOUBLE,
     riegel_factor DOUBLE,
     computed_at TIMESTAMP DEFAULT current_timestamp
   )`,

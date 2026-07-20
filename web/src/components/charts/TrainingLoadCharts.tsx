@@ -97,7 +97,13 @@ export function MonthlyTimeChart({ data }: { data: Array<{ month_start: string; 
   );
 }
 
-export function LongRunProgressionChart({ data, raceDistanceKm }: { data: Array<{ week_start: string; longest_run_km: number }>; raceDistanceKm: number }) {
+export function LongRunProgressionChart({
+  data,
+  raceDistanceKm,
+}: {
+  data: Array<{ week_start: string; longest_run_km: number }>;
+  raceDistanceKm?: number | null;
+}) {
   return (
     <ResponsiveContainer width="100%" height={CHART_HEIGHT.secondary}>
       <ComposedChart data={data} margin={CHART_MARGIN}>
@@ -105,8 +111,12 @@ export function LongRunProgressionChart({ data, raceDistanceKm }: { data: Array<
         <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
         <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
         <Tooltip {...TOOLTIP_STYLE} labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)} km`, "Longest run"]} />
-        <ReferenceLine y={raceDistanceKm * 0.5} stroke={STATUS.warning} strokeDasharray="2 2" />
-        <ReferenceLine y={raceDistanceKm * 0.67} stroke={STATUS.critical} strokeDasharray="2 2" />
+        {raceDistanceKm != null && (
+          <>
+            <ReferenceLine y={raceDistanceKm * 0.5} stroke={STATUS.warning} strokeDasharray="2 2" />
+            <ReferenceLine y={raceDistanceKm * 0.67} stroke={STATUS.critical} strokeDasharray="2 2" />
+          </>
+        )}
         <Bar dataKey="longest_run_km" fill={SERIES.blue} />
       </ComposedChart>
     </ResponsiveContainer>

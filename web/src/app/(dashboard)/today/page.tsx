@@ -25,7 +25,7 @@ export default async function TodayPage() {
     return (
       <div>
         <h1 className="text-lg font-semibold">This Week&apos;s Plan</h1>
-        <ReadinessBanner verdict={readiness.verdict} reasons={readiness.reasons} />
+        <ReadinessBanner verdict={readiness.verdict} signals={readiness.signals} />
         <p className="mt-2 text-sm text-neutral-500">
           No plan loaded yet. Upload a CSV on the Plan &amp; History page or add a race on the
           Race Prep page.
@@ -45,13 +45,13 @@ export default async function TodayPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold">This Week&apos;s Plan</h1>
-      <ReadinessBanner verdict={readiness.verdict} reasons={readiness.reasons} />
+      <ReadinessBanner verdict={readiness.verdict} signals={readiness.signals} />
       <div className="grid grid-cols-2 gap-2">
         <StatCard label="Week Phase" value={current.phase} caption={current.is_deload ? "Deload week" : "Build week"} />
         <StatCard
           label="Projected Finish"
-          value={milestones.projected_finish_h != null ? `${milestones.projected_finish_h.toFixed(1)}h` : "—"}
-          caption={`Cutoff ${milestones.cutoff_h.toFixed(0)}h`}
+          value={milestones?.projected_finish_h != null ? `${milestones.projected_finish_h.toFixed(1)}h` : "—"}
+          caption={milestones?.cutoff_h != null ? `Cutoff ${milestones.cutoff_h.toFixed(0)}h` : undefined}
         />
       </div>
       {(current.phase === "Taper" || current.phase === "Race Week") && <TaperChecklist />}

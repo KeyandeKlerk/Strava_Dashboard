@@ -8,10 +8,13 @@ import {
   deleteDailySession,
   deleteNiggleLog,
   deleteNutritionLog,
+  getAllRaceEvents,
+  getPrimaryGoalRace,
   moveDailySession,
   queryPlanDay,
   upsertActivity,
   upsertNutritionTargets,
+  upsertRaceEvent,
 } from "./mutations";
 import { queryRow } from "./client";
 
@@ -231,5 +234,83 @@ describe("addNiggleLog / deleteNiggleLog", () => {
 
     const row = await queryRow(conn, "SELECT id FROM niggle_logs WHERE id = $id", { id });
     expect(row).toBeUndefined();
+  });
+});
+
+describe("upsertRaceEvent", () => {
+  it("stores terrain_factor and cutoff_h, defaulting terrain_factor to 1.0 when omitted", async () => {
+    const idWithExtras = await upsertRaceEvent(conn, {
+      name: "Two Oceans",
+      race_date: "2027-04-10",
+      distance_km: 56.0,
+      priority: "B",
+      terrain_factor: 1.04,
+      cutoff_h: 7.0,
+    });
+    const idDefaulted = await upsertRaceEvent(conn, {
+      name: "Local Parkrun",
+      race_date: "2027-01-03",
+      distance_km: 5.0,
+      priority: "C",
+    });
+
+    const rows = await getAllRaceEvents<{ id: number; terrain_factor: number; cutoff_h: number | null }>(conn);
+    const withExtras = rows.find((r) => r.id === idWithExtras)!;
+    const defaulted = rows.find((r) => r.id === idDefaulted)!;
+
+    expect(withExtras.terrain_factor).toBe(1.04);
+    expect(withExtras.cutoff_h).toBe(7.0);
+    expect(defaulted.terrain_factor).toBe(1.0);
+    expect(defaulted.cutoff_h).toBeNull();
+  });
+
+  it("updates terrain_factor and cutoff_h in place when an id is passed", async () => {
+    const id = await upsertRaceEvent(conn, {
+      name: "Comrades",
+      race_date: "2027-06-13",
+      distance_km: 90.0,
+      priority: "A",
+      terrain_factor: 1.04,
+      cutoff_h: 12.0,
+    });
+    await upsertRaceEvent(conn, {
+      id,
+      name: "Comrades",
+      race_date: "2027-06-13",
+      distance_km: 90.0,
+      priority: "A",
+      terrain_factor: 1.08,
+      cutoff_h: 11.5,
+    });
+
+    const rows = await getAllRaceEvents<{ id: number; terrain_factor: number; cutoff_h: number | null }>(conn);
+    const row = rows.find((r) => r.id === id)!;
+    expect(row.terrain_factor).toBe(1.08);
+    expect(row.cutoff_h).toBe(11.5);
+  });
+});
+
+describe("getPrimaryGoalRace", () => {
+  it("picks the A-priority race over a nearer B-priority race", async () => {
+    await upsertRaceEvent(conn, { name: "B Race", race_date: "2027-05-01", distance_km: 21.1, priority: "B" });
+    await upsertRaceEvent(conn, { name: "A Race", race_date: "2027-06-13", distance_km: 90.0, priority: "A" });
+
+    const goal = await getPrimaryGoalRace<{ name: string }>(conn);
+    expect(goal?.name).toBe("A Race");
+  });
+
+  it("picks the nearest upcoming race when priorities are tied", async () => {
+    await upsertRaceEvent(conn, { name: "Later B", race_date: "2027-08-01", distance_km: 10.0, priority: "B" });
+    await upsertRaceEvent(conn, { name: "Sooner B", race_date: "2027-05-01", distance_km: 10.0, priority: "B" });
+
+    const goal = await getPrimaryGoalRace<{ name: string }>(conn);
+    expect(goal?.name).toBe("Sooner B");
+  });
+
+  it("ignores races that have already passed", async () => {
+    await upsertRaceEvent(conn, { name: "Past Race", race_date: "2020-01-01", distance_km: 42.195, priority: "A" });
+
+    const goal = await getPrimaryGoalRace<{ name: string }>(conn);
+    expect(goal).toBeUndefined();
   });
 });

@@ -74,12 +74,12 @@ export function AcwrChart({ data }: { data: AcwrRow[] }) {
 }
 
 export function RampRateChart({ data }: { data: RampRateRow[] }) {
-  const recent = data.filter((r) => r.ramp_pct != null).slice(-112);
+  const recent = data.filter((r) => r.ramp_pct != null);
   return (
     <ResponsiveContainer width="100%" height={CHART_HEIGHT.secondary}>
       <ComposedChart data={recent} margin={CHART_MARGIN}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="day" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
+        <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
         <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} />
         <Tooltip {...TOOLTIP_STYLE} labelFormatter={dateTooltipLabel} formatter={(v) => [`${Number(v).toFixed(1)}%`, "Ramp"]} />
         <ReferenceLine y={10} stroke={STATUS.warning} strokeDasharray="4 4" />

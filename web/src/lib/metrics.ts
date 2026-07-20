@@ -5,7 +5,6 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { queryRow, queryRows } from "./db/client";
 
-export const RACE_DISTANCE_KM = 90.0;
 export const TRAINING_START = "2026-01-01";
 export const TRAINING_END: string | null = null;
 
@@ -142,52 +141,56 @@ export async function acwrHistory(conn: DuckDBConnection): Promise<AcwrRow[]> {
 }
 
 export interface RampRateRow {
-  day: string;
+  week_start: string;
   run_distance_km: number;
   prev_period_km: number;
   ramp_pct: number | null;
 }
 
+// Calendar weeks (Mon-Sun), matching how training_plan itself is structured
+// — not a rolling 7-day-ending-today window. The still-in-progress current
+// week substitutes the plan's target distance instead of a partial actual
+// total, since actual-to-date always understates it until the week is over.
 export async function weeklyRampRate(conn: DuckDBConnection): Promise<RampRateRow[]> {
   return queryRows<RampRateRow>(
     conn,
-    `WITH date_spine AS (
-        SELECT UNNEST(generate_series(
-            (SELECT MIN(start_date_local::DATE) FROM activities WHERE category = 'running' AND ${dateFilter()}),
-            CURRENT_DATE,
-            INTERVAL '1 day'
-        ))::DATE AS day
-    ),
-    daily_km AS (
-        SELECT start_date_local::DATE AS day, SUM(COALESCE(distance_km, 0)) AS run_km
+    `WITH weekly_actual AS (
+        SELECT
+            DATE_TRUNC('week', start_date_local::DATE) AS week_start,
+            SUM(CASE WHEN category = 'running' THEN COALESCE(distance_km, 0) ELSE 0 END) AS actual_km
         FROM activities
-        WHERE category = 'running' AND ${dateFilter()}
+        WHERE ${dateFilter()}
         GROUP BY 1
     ),
-    daily AS (
-        SELECT d.day, COALESCE(k.run_km, 0.0) AS run_km
-        FROM date_spine d
-        LEFT JOIN daily_km k ON d.day = k.day
-    ),
-    rolling AS (
+    weekly AS (
         SELECT
-            day,
-            SUM(run_km) OVER (ORDER BY day ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS run_distance_km,
-            SUM(run_km) OVER (ORDER BY day ROWS BETWEEN 13 PRECEDING AND 7 PRECEDING) AS prev_period_km,
-            COUNT(*) OVER (ORDER BY day ROWS BETWEEN 13 PRECEDING AND CURRENT ROW) AS window_days
-        FROM daily
+            wa.week_start,
+            CASE
+                WHEN wa.week_start + INTERVAL 7 DAY > CURRENT_DATE AND tp.planned_distance_km IS NOT NULL
+                THEN tp.planned_distance_km
+                ELSE wa.actual_km
+            END AS effective_km
+        FROM weekly_actual wa
+        LEFT JOIN training_plan tp ON tp.week_start_date::DATE = wa.week_start::DATE
+    ),
+    ramp AS (
+        SELECT
+            week_start,
+            effective_km,
+            LAG(effective_km) OVER (ORDER BY week_start) AS prev_km
+        FROM weekly
     )
     SELECT
-        day::VARCHAR AS day,
-        run_distance_km,
-        prev_period_km,
+        week_start::VARCHAR AS week_start,
+        effective_km AS run_distance_km,
+        prev_km AS prev_period_km,
         CASE
-            WHEN window_days = 14 AND prev_period_km > 0
-            THEN ROUND((run_distance_km - prev_period_km) / prev_period_km * 100, 1)
+            WHEN prev_km > 0
+            THEN ROUND((effective_km - prev_km) / prev_km * 100, 1)
             ELSE NULL
         END AS ramp_pct
-    FROM rolling
-    ORDER BY day DESC`,
+    FROM ramp
+    ORDER BY week_start DESC`,
   );
 }
 
@@ -633,12 +636,53 @@ export async function backToBackRuns(conn: DuckDBConnection, minKm = 15.0): Prom
   );
 }
 
-export interface ComradesMilestones {
+export interface BestEffortRow {
+  distance_km: number;
+  moving_time_min: number;
+  activity_date: string;
+  source: "race" | "run";
+}
+
+// "What's my current form based on" — shared by the VO2max estimate and the
+// generalized race-time predictor, so both read from the same underlying
+// performance rather than two separately-chosen efforts. Prefers a real
+// detected race (race_analysis, an actual all-out effort) over a training
+// run; falls back to the fastest average_speed_kmh run meeting a minimum
+// distance/duration (long/slow runs aren't representative of current speed).
+export async function bestRecentEffort(conn: DuckDBConnection, sinceDays = 90): Promise<BestEffortRow | null> {
+  const raceRow = await queryRow<{ distance_km: number; moving_time_min: number; activity_date: string }>(
+    conn,
+    `SELECT a.distance_km, a.moving_time_min, a.start_date_local::DATE::VARCHAR AS activity_date
+     FROM race_analysis ra
+     JOIN activities a ON a.id = ra.activity_id
+     WHERE a.start_date_local >= CURRENT_DATE - INTERVAL '${sinceDays} days'
+     ORDER BY ra.computed_at DESC
+     LIMIT 1`,
+  );
+  if (raceRow) return { ...raceRow, source: "race" };
+
+  const runRow = await queryRow<{ distance_km: number; moving_time_min: number; activity_date: string }>(
+    conn,
+    `SELECT distance_km, moving_time_min, start_date_local::DATE::VARCHAR AS activity_date
+     FROM activities
+     WHERE category = 'running'
+       AND distance_km >= 3
+       AND moving_time_min >= 15
+       AND average_speed_kmh > 0
+       AND start_date_local >= CURRENT_DATE - INTERVAL '${sinceDays} days'
+     ORDER BY average_speed_kmh DESC
+     LIMIT 1`,
+  );
+  if (!runRow) return null;
+  return { ...runRow, source: "run" };
+}
+
+export interface RaceMilestones {
   longest_run_km: number;
   longest_run_pct_race: number;
   total_descent_m: number;
-  race_descent_m: number;
-  descent_pct_practiced: number;
+  race_descent_m: number | null;
+  descent_pct_practiced: number | null;
   total_gain_m: number;
   runs_20plus: number;
   runs_30plus: number;
@@ -646,14 +690,20 @@ export interface ComradesMilestones {
   max_b2b_km: number;
   projected_finish_min: number | null;
   projected_finish_h: number | null;
-  cutoff_h: number;
+  cutoff_h: number | null;
 }
 
-export async function comradesMilestones(
+// raceDistanceKm is the primary goal race's actual distance (not a fixed
+// constant); cutoffH/raceDescentM are per-race data the caller may not have
+// (most races don't have a known cutoff or a course descent figure to
+// compare against) — when omitted, the corresponding stats come back null
+// rather than pretending to know a number for an arbitrary race.
+export async function raceMilestones(
   conn: DuckDBConnection,
-  raceDistanceKm = RACE_DISTANCE_KM,
-  raceDescentM = 1800.0,
-): Promise<ComradesMilestones> {
+  raceDistanceKm: number,
+  cutoffH?: number | null,
+  raceDescentM?: number,
+): Promise<RaceMilestones> {
   const longestRunRow = await queryRow<{ longest: number }>(
     conn,
     `SELECT COALESCE(MAX(distance_km), 0) AS longest FROM activities
@@ -721,8 +771,9 @@ export async function comradesMilestones(
     longest_run_km: longestRun,
     longest_run_pct_race: Math.round((longestRun / raceDistanceKm) * 100 * 10) / 10,
     total_descent_m: totalDescent,
-    race_descent_m: raceDescentM,
-    descent_pct_practiced: totalDescent ? Math.round((totalDescent / raceDescentM) * 100 * 10) / 10 : 0.0,
+    race_descent_m: raceDescentM ?? null,
+    descent_pct_practiced:
+      raceDescentM != null ? Math.round((totalDescent / raceDescentM) * 100 * 10) / 10 : null,
     total_gain_m: totalGain,
     runs_20plus: runCounts?.runs_20plus ?? 0,
     runs_30plus: runCounts?.runs_30plus ?? 0,
@@ -730,7 +781,7 @@ export async function comradesMilestones(
     max_b2b_km: maxB2b,
     projected_finish_min: projectedMin,
     projected_finish_h: projectedMin ? Math.round((projectedMin / 60) * 100) / 100 : null,
-    cutoff_h: 12.0,
+    cutoff_h: cutoffH ?? null,
   };
 }
 
@@ -913,13 +964,17 @@ export interface ComradesSplitRow {
 }
 
 export async function comradesProjectedSplits(conn: DuckDBConnection): Promise<ComradesSplitRow[]> {
-  const projRow = await queryRow<{ comrades_projection_h: number }>(
+  const projRow = await queryRow<{ projected_finish_h: number }>(
     conn,
-    "SELECT comrades_projection_h FROM race_analysis ORDER BY computed_at DESC LIMIT 1",
+    "SELECT projected_finish_h FROM race_analysis ORDER BY computed_at DESC LIMIT 1",
   );
 
   let totalH: number;
   if (!projRow) {
+    // Fallback estimate is intentionally Comrades-specific (90km, +4% Down
+    // Run terrain factor) — this whole function only ever renders when the
+    // goal race is Comrades (its checkpoints are the actual Comrades route),
+    // so it's coherent for the fallback to assume the same race too.
     const z2Row = await queryRow<{ avg_min_per_km: number | null }>(
       conn,
       `SELECT AVG(moving_time_min / NULLIF(distance_km, 0)) AS avg_min_per_km
@@ -930,7 +985,7 @@ export async function comradesProjectedSplits(conn: DuckDBConnection): Promise<C
     if (!z2Row?.avg_min_per_km) return [];
     totalH = (z2Row.avg_min_per_km * 90.0) / 60.0 * 1.04;
   } else {
-    totalH = projRow.comrades_projection_h;
+    totalH = projRow.projected_finish_h;
   }
 
   const totalMin = totalH * 60.0;

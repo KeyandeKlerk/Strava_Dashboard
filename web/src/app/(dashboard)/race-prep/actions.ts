@@ -14,6 +14,8 @@ export async function addRaceEvent(formData: FormData): Promise<void> {
   if (!name) return;
 
   const targetFinish = Number(formData.get("target_finish_h") ?? 0);
+  const terrainFactor = Number(formData.get("terrain_factor") ?? 1.0);
+  const cutoffH = Number(formData.get("cutoff_h") ?? 0);
 
   await upsertRaceEvent(await getConnection(), {
     name,
@@ -22,6 +24,8 @@ export async function addRaceEvent(formData: FormData): Promise<void> {
     priority: String(formData.get("priority") ?? "B"),
     target_finish_h: targetFinish > 0 ? targetFinish : null,
     notes: String(formData.get("notes") ?? "").trim() || null,
+    terrain_factor: terrainFactor > 0 ? terrainFactor : 1.0,
+    cutoff_h: cutoffH > 0 ? cutoffH : null,
   });
 
   updateTag(DASHBOARD_DATA_TAG);

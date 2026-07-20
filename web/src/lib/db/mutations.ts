@@ -377,6 +377,8 @@ export interface RaceEventInput {
   priority: string;
   target_finish_h?: number | null;
   notes?: string | null;
+  terrain_factor?: number | null;
+  cutoff_h?: number | null;
 }
 
 export async function upsertRaceEvent(conn: DuckDBConnection, event: RaceEventInput): Promise<number> {
@@ -384,7 +386,8 @@ export async function upsertRaceEvent(conn: DuckDBConnection, event: RaceEventIn
     await conn.run(
       `UPDATE race_events
        SET name = $name, race_date = $race_date, distance_km = $distance_km, priority = $priority,
-           target_finish_h = $target_finish_h, notes = $notes
+           target_finish_h = $target_finish_h, notes = $notes,
+           terrain_factor = $terrain_factor, cutoff_h = $cutoff_h
        WHERE id = $id`,
       {
         name: event.name,
@@ -393,6 +396,8 @@ export async function upsertRaceEvent(conn: DuckDBConnection, event: RaceEventIn
         priority: event.priority,
         target_finish_h: event.target_finish_h ?? null,
         notes: event.notes ?? null,
+        terrain_factor: event.terrain_factor ?? 1.0,
+        cutoff_h: event.cutoff_h ?? null,
         id: event.id,
       },
     );
@@ -400,8 +405,8 @@ export async function upsertRaceEvent(conn: DuckDBConnection, event: RaceEventIn
   }
   const row = await queryRow<{ id: number }>(
     conn,
-    `INSERT INTO race_events (name, race_date, distance_km, priority, target_finish_h, notes)
-     VALUES ($name, $race_date, $distance_km, $priority, $target_finish_h, $notes)
+    `INSERT INTO race_events (name, race_date, distance_km, priority, target_finish_h, notes, terrain_factor, cutoff_h)
+     VALUES ($name, $race_date, $distance_km, $priority, $target_finish_h, $notes, $terrain_factor, $cutoff_h)
      RETURNING id`,
     {
       name: event.name,
@@ -410,6 +415,8 @@ export async function upsertRaceEvent(conn: DuckDBConnection, event: RaceEventIn
       priority: event.priority,
       target_finish_h: event.target_finish_h ?? null,
       notes: event.notes ?? null,
+      terrain_factor: event.terrain_factor ?? 1.0,
+      cutoff_h: event.cutoff_h ?? null,
     },
   );
   return Number(row?.id);
@@ -439,26 +446,26 @@ export interface RaceAnalysisInput {
   race_event_id: number;
   activity_id: number;
   avg_pace_min_km?: number | null;
-  comrades_projection_h: number;
+  projected_finish_h: number;
   riegel_factor?: number | null;
 }
 
 export async function upsertRaceAnalysis(conn: DuckDBConnection, analysis: RaceAnalysisInput): Promise<void> {
   await conn.run(
     `INSERT INTO race_analysis
-        (race_event_id, activity_id, avg_pace_min_km, comrades_projection_h, riegel_factor, computed_at)
-     VALUES ($race_event_id, $activity_id, $avg_pace_min_km, $comrades_projection_h, $riegel_factor, now())
+        (race_event_id, activity_id, avg_pace_min_km, projected_finish_h, riegel_factor, computed_at)
+     VALUES ($race_event_id, $activity_id, $avg_pace_min_km, $projected_finish_h, $riegel_factor, now())
      ON CONFLICT (race_event_id) DO UPDATE SET
         activity_id = excluded.activity_id,
         avg_pace_min_km = excluded.avg_pace_min_km,
-        comrades_projection_h = excluded.comrades_projection_h,
+        projected_finish_h = excluded.projected_finish_h,
         riegel_factor = excluded.riegel_factor,
         computed_at = excluded.computed_at`,
     {
       race_event_id: analysis.race_event_id,
       activity_id: analysis.activity_id,
       avg_pace_min_km: analysis.avg_pace_min_km ?? null,
-      comrades_projection_h: analysis.comrades_projection_h,
+      projected_finish_h: analysis.projected_finish_h,
       riegel_factor: analysis.riegel_factor ?? null,
     },
   );
@@ -551,9 +558,25 @@ export async function getAllRaceEvents<T = Record<string, unknown>>(conn: DuckDB
   return queryRows<T>(
     conn,
     `SELECT id, name, race_date, distance_km, priority,
-            target_finish_h, notes, strava_activity_id
+            target_finish_h, notes, strava_activity_id, terrain_factor, cutoff_h
      FROM race_events
      ORDER BY race_date`,
+  );
+}
+
+// Single source of truth for "what race is this app currently pointed at" —
+// the nearest upcoming A-priority race, falling back to the nearest upcoming
+// race of any priority. Used both to decide the Riegel projection target
+// (raceDetection.ts) and to drive the generic race-prep UI (pageData.ts).
+export async function getPrimaryGoalRace<T = Record<string, unknown>>(conn: DuckDBConnection): Promise<T | undefined> {
+  return queryRow<T>(
+    conn,
+    `SELECT id, name, race_date, distance_km, priority,
+            target_finish_h, notes, strava_activity_id, terrain_factor, cutoff_h
+     FROM race_events
+     WHERE race_date >= CURRENT_DATE
+     ORDER BY CASE priority WHEN 'A' THEN 0 ELSE 1 END, race_date
+     LIMIT 1`,
   );
 }
 

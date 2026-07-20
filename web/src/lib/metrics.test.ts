@@ -108,9 +108,23 @@ async function insertRunWithStreams(
   });
 }
 
+// bestRecentEffort's window is CURRENT_DATE-relative, so its fixtures must be
+// anchored to the real wall-clock date rather than a fixed calendar date.
+function daysAgo(n: number): string {
+  return new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+}
+
 function rowForDay<T extends { day: string }>(rows: T[], dayStr: string): T {
   const matches = rows.filter((r) => r.day === dayStr);
   expect(matches.length, `expected exactly one row for ${dayStr}, found ${matches.length}`).toBe(1);
+  return matches[0];
+}
+
+// DATE_TRUNC('week', ...)::VARCHAR carries a " 00:00:00" time suffix (same as
+// every other week_start column in this file) — match on the date prefix.
+function rowForWeek<T extends { week_start: string }>(rows: T[], weekStartStr: string): T {
+  const matches = rows.filter((r) => r.week_start.startsWith(weekStartStr));
+  expect(matches.length, `expected exactly one row for week ${weekStartStr}, found ${matches.length}`).toBe(1);
   return matches[0];
 }
 
@@ -197,19 +211,49 @@ describe("acwrHistory", () => {
 });
 
 describe("weeklyRampRate", () => {
-  it("returns pct", async () => {
-    await insertRun(1, "2026-03-01T07:00:00", 40.0, { loadScore: 40.0 });
-    await insertRun(2, "2026-03-14T07:00:00", 44.0, { loadScore: 44.0 });
+  it("computes ramp % between two completed calendar weeks (Mon-Sun)", async () => {
+    await insertRun(1, "2026-03-02T07:00:00", 40.0); // Mon, week of 2026-03-02
+    await insertRun(2, "2026-03-11T07:00:00", 44.0); // Wed, week of 2026-03-09
     const rows = await metrics.weeklyRampRate(conn);
-    const row = rowForDay(rows, "2026-03-14");
+    const row = rowForWeek(rows, "2026-03-09");
+    approx(row.run_distance_km, 44.0);
+    approx(row.prev_period_km, 40.0);
     approx(row.ramp_pct as number, 10.0, 0.1);
   });
 
-  it("is null until two full windows exist", async () => {
-    await insertRun(1, "2026-03-01T07:00:00", 40.0, { loadScore: 40.0 });
+  it("is null for the first week with no prior week to compare against", async () => {
+    await insertRun(1, "2026-03-02T07:00:00", 40.0);
     const rows = await metrics.weeklyRampRate(conn);
-    const beforeFullWindow = rows.filter((r) => r.day < "2026-03-14");
-    expect(beforeFullWindow.filter((r) => r.ramp_pct != null).length).toBe(0);
+    const row = rowForWeek(rows, "2026-03-02");
+    expect(row.ramp_pct).toBeNull();
+  });
+
+  it("uses the plan's target distance for the still-in-progress current week, not partial actual", async () => {
+    await insertRun(1, "2026-07-13T07:00:00", 40.0); // completed prior week (2026-07-13 is a Monday)
+    await insertRun(2, "2026-07-21T07:00:00", 5.0); // this week (2026-07-20 is today, a Monday) — only 1 run so far
+    await upsertTrainingPlanWeek(conn, {
+      week_number: 1,
+      week_start_date: "2026-07-20",
+      phase: "Build",
+      planned_distance_km: 50.0,
+      planned_long_run_km: 20.0,
+      planned_sessions: 5,
+      is_deload: false,
+    });
+
+    const rows = await metrics.weeklyRampRate(conn);
+    const row = rowForWeek(rows, "2026-07-20");
+    approx(row.run_distance_km, 50.0); // planned, not the 5km logged so far
+    approx(row.prev_period_km, 40.0);
+    approx(row.ramp_pct as number, 25.0, 0.1);
+  });
+
+  it("falls back to partial actual for the current week when no plan exists", async () => {
+    await insertRun(1, "2026-07-13T07:00:00", 40.0);
+    await insertRun(2, "2026-07-21T07:00:00", 5.0);
+    const rows = await metrics.weeklyRampRate(conn);
+    const row = rowForWeek(rows, "2026-07-20");
+    approx(row.run_distance_km, 5.0);
   });
 });
 
@@ -306,10 +350,10 @@ describe("backToBackRuns", () => {
   });
 });
 
-describe("comradesMilestones", () => {
+describe("raceMilestones", () => {
   it("returns expected fields", async () => {
     await insertRunWithStreams(1, "2026-03-16T07:00:00", 30.0, 145.0, 10.0, { lossM: 300.0 });
-    const result = await metrics.comradesMilestones(conn);
+    const result = await metrics.raceMilestones(conn, 90.0);
     expect(result).toHaveProperty("longest_run_km");
     expect(result).toHaveProperty("longest_run_pct_race");
     expect(result).toHaveProperty("total_descent_m");
@@ -321,11 +365,27 @@ describe("comradesMilestones", () => {
     await insertRun(1, "2026-03-11T07:00:00", 25.0, { elevation: 200.0 });
     await insertRun(2, "2026-03-18T07:00:00", 22.0, { elevation: 150.0 });
     await insertRun(3, "2026-03-25T07:00:00", 10.0, { elevation: 50.0 });
-    const result = await metrics.comradesMilestones(conn);
+    const result = await metrics.raceMilestones(conn, 90.0);
     expect(result).toHaveProperty("total_gain_m");
     approx(result.total_gain_m, 400.0);
     expect(result.runs_20plus).toBe(2);
     expect(result.runs_30plus).toBe(0);
+  });
+
+  it("returns null cutoff/descent stats for a generic race (not provided)", async () => {
+    await insertRun(1, "2026-03-16T07:00:00", 20.0);
+    const result = await metrics.raceMilestones(conn, 42.195);
+    expect(result.cutoff_h).toBeNull();
+    expect(result.race_descent_m).toBeNull();
+    expect(result.descent_pct_practiced).toBeNull();
+  });
+
+  it("returns cutoff/descent stats when provided (e.g. Comrades)", async () => {
+    await insertRunWithStreams(1, "2026-03-16T07:00:00", 30.0, 145.0, 10.0, { lossM: 900.0 });
+    const result = await metrics.raceMilestones(conn, 90.0, 12.0, 1800.0);
+    expect(result.cutoff_h).toBe(12.0);
+    expect(result.race_descent_m).toBe(1800.0);
+    approx(result.descent_pct_practiced!, 50.0);
   });
 });
 
@@ -506,7 +566,7 @@ it("comradesProjectedSplits returns checkpoints ending at Durban", async () => {
   await upsertRaceAnalysis(conn, {
     race_event_id: rid,
     activity_id: 88888,
-    comrades_projection_h: 9.5,
+    projected_finish_h: 9.5,
     riegel_factor: 1.06,
   });
   const rows = await metrics.comradesProjectedSplits(conn);
@@ -536,6 +596,47 @@ describe("weeklyEfficiencyFactor", () => {
     expect(rows[0].run_count).toBe(2);
     const expectedMean = (10.0 / 140.0 + 12.0 / 150.0) / 2;
     approx(rows[0].mean_ef, expectedMean, expectedMean * 0.01);
+  });
+});
+
+describe("bestRecentEffort", () => {
+  it("prefers a detected race over a faster training run in the same window", async () => {
+    await insertRun(1, `${daysAgo(10)}T06:00:00`, 21.1, { movingTimeMin: 95.0 }); // race
+    const raceId = await upsertRaceEvent(conn, { name: "Half Marathon", race_date: daysAgo(10), distance_km: 21.1, priority: "B" });
+    await upsertRaceAnalysis(conn, { race_event_id: raceId, activity_id: 1, projected_finish_h: 3.1 });
+    // Faster (higher avg speed) but not a detected race — should lose to the race.
+    await insertRun(2, `${daysAgo(5)}T06:00:00`, 5.0, { movingTimeMin: 18.0 });
+
+    const result = await metrics.bestRecentEffort(conn);
+    expect(result?.source).toBe("race");
+    approx(result!.distance_km, 21.1);
+    approx(result!.moving_time_min, 95.0);
+  });
+
+  it("falls back to the fastest qualifying run when no race analysis exists", async () => {
+    await insertRun(1, `${daysAgo(20)}T06:00:00`, 10.0, { movingTimeMin: 50.0 }); // 12 km/h
+    await insertRun(2, `${daysAgo(10)}T06:00:00`, 10.0, { movingTimeMin: 40.0 }); // 15 km/h — fastest
+
+    const result = await metrics.bestRecentEffort(conn);
+    expect(result?.source).toBe("run");
+    approx(result!.distance_km, 10.0);
+    approx(result!.moving_time_min, 40.0);
+  });
+
+  it("excludes runs below the distance/duration minimums", async () => {
+    await insertRun(1, `${daysAgo(5)}T06:00:00`, 1.0, { movingTimeMin: 4.0 }); // too short, too fast — excluded
+    await insertRun(2, `${daysAgo(4)}T06:00:00`, 10.0, { movingTimeMin: 55.0 }); // qualifies
+
+    const result = await metrics.bestRecentEffort(conn);
+    expect(result?.source).toBe("run");
+    approx(result!.distance_km, 10.0);
+  });
+
+  it("returns null when nothing qualifies within the window", async () => {
+    await insertRun(1, `${daysAgo(200)}T06:00:00`, 10.0, { movingTimeMin: 50.0 });
+
+    const result = await metrics.bestRecentEffort(conn);
+    expect(result).toBeNull();
   });
 });
 

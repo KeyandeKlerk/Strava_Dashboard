@@ -1,4 +1,4 @@
-import { FLAG_EMOJI, type Flag } from "@/lib/shared";
+import { FLAG_EMOJI, type Flag, type ReadinessSignal } from "@/lib/shared";
 
 const HEADLINE: Record<Flag, string> = {
   green: "Green light — clear to train as planned",
@@ -17,13 +17,20 @@ const STYLE: Record<Flag, string> = {
   gray: "border-neutral-200 bg-neutral-50 text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400",
 };
 
-export function ReadinessBanner({ verdict, reasons }: { verdict: Flag; reasons: string[] }) {
+export function ReadinessBanner({ verdict, signals }: { verdict: Flag; signals: ReadinessSignal[] }) {
   return (
     <div className={`rounded-lg border p-3 ${STYLE[verdict]}`}>
       <p className="text-sm font-semibold">
         {FLAG_EMOJI[verdict]} {HEADLINE[verdict]}
       </p>
-      {reasons.length > 0 && <p className="mt-1 text-xs opacity-90">{reasons.join(" · ")}</p>}
+      <ul className="mt-2 space-y-0.5 text-xs opacity-90">
+        {signals.map((s) => (
+          <li key={s.label}>
+            {FLAG_EMOJI[s.flag]} {s.label}: {s.detail ?? "—"}
+            {s.range ? ` (${s.range})` : ""}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

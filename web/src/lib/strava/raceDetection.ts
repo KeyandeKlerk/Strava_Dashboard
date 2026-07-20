@@ -4,17 +4,18 @@
 // separate feature not required for sync and is not ported here.
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { queryRows } from "../db/client";
-import { stampRaceActivity, upsertRaceAnalysis } from "../db/mutations";
+import { getPrimaryGoalRace, stampRaceActivity, upsertRaceAnalysis } from "../db/mutations";
 import type { ActivityInput } from "../db/mutations";
 
-export const RACE_DISTANCE_KM = 90.0;
-const TERRAIN_FACTOR = 1.04; // +4% for Comrades Down Run
+// Riegel's endurance-fatigue exponent — a generic default, not tuned to any
+// specific race.
+const RIEGEL_EXPONENT = 1.06;
 
 export interface RaceAnalysisResult {
   race_event_id: number;
   activity_id: number;
   avg_pace_min_km: number | null;
-  comrades_projection_h: number;
+  projected_finish_h: number;
   riegel_factor: number;
 }
 
@@ -58,17 +59,18 @@ export async function detectAndAnalyseRace(
     race_event_id: raceEventId,
     activity_id: activity.id,
     avg_pace_min_km: avgPace,
-    comrades_projection_h: 0.0,
-    riegel_factor: 1.06,
+    projected_finish_h: 0.0,
+    riegel_factor: RIEGEL_EXPONENT,
   };
 
   if (raceTimeH) {
-    analysis.comrades_projection_h = await updateComradesProjection(conn, raceEventId, {
+    const projection = await updateRaceProjection(conn, raceEventId, {
       activity_id: activity.id,
       avg_pace_min_km: avgPace,
       race_distance_km: raceKm,
       race_time_h: raceTimeH,
     });
+    if (projection != null) analysis.projected_finish_h = projection;
   }
 
   return analysis;
@@ -81,21 +83,36 @@ interface RaceResultInput {
   race_time_h: number;
 }
 
-export async function updateComradesProjection(
+interface GoalRaceRow {
+  distance_km: number;
+  terrain_factor: number | null;
+}
+
+// Projects a completed race/effort forward to the *primary goal race*
+// (nearest upcoming A-priority race_events row, see getPrimaryGoalRace) —
+// not a hardcoded distance. terrain_factor is per-race data (defaults to
+// 1.0, neutral) rather than a single constant baked in for one course.
+// Returns null if there's no upcoming goal race to project toward.
+export async function updateRaceProjection(
   conn: DuckDBConnection,
   raceEventId: number,
   raceResult: RaceResultInput,
-): Promise<number> {
+): Promise<number | null> {
+  const goalRace = await getPrimaryGoalRace<GoalRaceRow>(conn);
+  if (!goalRace) return null;
+
   const riegel =
-    raceResult.race_time_h * (RACE_DISTANCE_KM / raceResult.race_distance_km) ** 1.06 * TERRAIN_FACTOR;
+    raceResult.race_time_h *
+    (goalRace.distance_km / raceResult.race_distance_km) ** RIEGEL_EXPONENT *
+    (goalRace.terrain_factor ?? 1.0);
   const projectionH = Math.round(riegel * 1000) / 1000;
 
   await upsertRaceAnalysis(conn, {
     race_event_id: raceEventId,
     activity_id: raceResult.activity_id,
     avg_pace_min_km: raceResult.avg_pace_min_km,
-    comrades_projection_h: projectionH,
-    riegel_factor: 1.06,
+    projected_finish_h: projectionH,
+    riegel_factor: RIEGEL_EXPONENT,
   });
 
   return projectionH;
