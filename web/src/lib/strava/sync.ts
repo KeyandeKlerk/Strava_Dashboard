@@ -5,11 +5,12 @@ import {
   correlateActivitiesToPlan,
   getLastSynced,
   setLastSynced,
+  updateGearName,
   upsertActivity,
   upsertGear,
   type ActivityInput,
 } from "../db/mutations";
-import { getActivities, getGear, refreshAccessToken } from "./client";
+import { getActivities, getActivityById, getGear, refreshAccessToken } from "./client";
 import { parseActivity, type RawStravaActivity } from "./parser";
 import { detectAndAnalyseRace } from "./raceDetection";
 import { runBackfill } from "./backfill";
@@ -85,11 +86,17 @@ export async function runSync(conn: DuckDBConnection): Promise<{ processedCount:
     }
   }
 
+  const refreshedActivities = await refreshRecentActivities(
+    conn,
+    (id) => getActivityById(accessToken, id),
+    getRecentRefreshCount(),
+  );
+
   // Refresh every known shoe/gear's name + retired status from Strava on
   // every sync, not just gear seen on brand-new activities — a shoe you just
   // retired in Strava won't appear on any new activity again, so that's
   // exactly the case that needs an unconditional refresh to be caught.
-  await refreshGear(conn, accessToken, newActivities);
+  await refreshGear(conn, accessToken, [...newActivities, ...refreshedActivities]);
 
   const nowTs = Math.floor(Date.now() / 1000);
   await setLastSynced(conn, nowTs);
@@ -110,7 +117,9 @@ async function refreshGear(conn: DuckDBConnection, accessToken: string, newActiv
   for (const gearId of gearIds) {
     const gearData = await getGear(accessToken, gearId);
     if (gearData) {
-      await upsertGear(conn, gearId, gearData.name ?? gearId, gearData.retired ?? false);
+      const name = gearData.name ?? gearId;
+      await upsertGear(conn, gearId, name, gearData.retired ?? false);
+      await updateGearName(conn, gearId, name);
     }
   }
 }
