@@ -828,6 +828,7 @@ git commit -m "feat: wire recent-activity refresh into runSync and fix gear_name
 
 After all tasks are committed, confirm the feature end-to-end against the real Strava account:
 
+0. **Run the production migration BEFORE deploying app code.** `initSchema` (which contains Task 1's `ALTER TABLE activities ADD COLUMN IF NOT EXISTS description TEXT`) is only ever run against non-MotherDuck connections (`web/src/lib/db/client.ts`'s `usingMotherDuck` check skips it entirely for the live database), so the `description` column never reaches production on its own. Run `web/scripts/add-activity-description-column.ts` against the live MotherDuck database first — deploying this feature's app code before running that script will make every sync fail (the new code references a column that doesn't exist yet in production).
 1. Deploy or run locally with real credentials (`web/.env` — see `[[reference_motherduck_credentials]]` memory for where the live token lives).
 2. On Strava, edit the title, description, or gear of one of your 5 most recent activities.
 3. Tap the manual sync button in the dashboard.

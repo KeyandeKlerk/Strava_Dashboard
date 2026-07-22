@@ -108,3 +108,15 @@ matching the fire-and-forget nature of `runSync` (it already runs detached via `
   not.
 - `refreshGear` writes `gear_name` onto matching `activities` rows, not just the `gear` table.
 - `STRAVA_RECENT_REFRESH_COUNT` env var: unset/invalid falls back to 5.
+
+## Addendum: production migration (found during final review)
+
+`initSchema` — which runs `SCHEMA_STATEMENTS`, including Task 1's `ALTER TABLE activities ADD
+COLUMN IF NOT EXISTS description TEXT` — is only invoked for non-MotherDuck connections
+(`web/src/lib/db/client.ts`'s `usingMotherDuck` check skips it for the live database, to avoid
+`CREATE TABLE IF NOT EXISTS` write-write conflicts under concurrent MotherDuck requests). This
+means the `description` column never reaches production on its own. Following this codebase's
+existing one-off-script convention (`web/scripts/generalize-race-engine.ts`), a standalone
+`web/scripts/add-activity-description-column.ts` must be run manually against the live
+MotherDuck database *before* deploying this feature's app code — otherwise the first
+post-deploy sync throws (the new code references a column that doesn't exist yet).
