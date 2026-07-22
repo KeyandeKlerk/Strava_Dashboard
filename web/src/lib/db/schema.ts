@@ -21,8 +21,10 @@ export const SCHEMA_STATEMENTS: readonly string[] = [
     load_score DOUBLE,
     gear_id VARCHAR,
     gear_name VARCHAR,
+    description TEXT,
     synced_at TIMESTAMP DEFAULT current_timestamp
   )`,
+  `ALTER TABLE activities ADD COLUMN IF NOT EXISTS description TEXT`,
   `CREATE TABLE IF NOT EXISTS activity_streams_derived (
     activity_id BIGINT PRIMARY KEY,
     elevation_loss_m DOUBLE,
