@@ -76,6 +76,10 @@ export async function getActivityStreams(accessToken: string, activityId: number
   }) as Promise<StravaStreamsResponse>;
 }
 
+export async function getActivityById(accessToken: string, activityId: number): Promise<RawStravaActivity> {
+  return stravaFetch(`/activities/${activityId}`, accessToken) as Promise<RawStravaActivity>;
+}
+
 export interface AthleteZonesResponse {
   heart_rate?: { zones?: Array<{ min: number; max: number }> };
 }
