@@ -30,7 +30,7 @@ export function hasEditableChanges(stored: EditableActivityFields, fetched: Edit
 
 export function getRecentRefreshCount(): number {
   const raw = process.env.STRAVA_RECENT_REFRESH_COUNT;
-  const parsed = raw ? parseInt(raw, 10) : NaN;
+  const parsed = raw ? Number(raw) : NaN;
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 5;
 }
 

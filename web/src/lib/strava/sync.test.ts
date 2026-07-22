@@ -49,4 +49,14 @@ describe("getRecentRefreshCount", () => {
     process.env.STRAVA_RECENT_REFRESH_COUNT = "not-a-number";
     expect(getRecentRefreshCount()).toBe(5);
   });
+
+  it('falls back to 5 for a non-integer value like "7.5"', () => {
+    process.env.STRAVA_RECENT_REFRESH_COUNT = "7.5";
+    expect(getRecentRefreshCount()).toBe(5);
+  });
+
+  it('falls back to 5 for a value with trailing non-numeric characters like "10abc"', () => {
+    process.env.STRAVA_RECENT_REFRESH_COUNT = "10abc";
+    expect(getRecentRefreshCount()).toBe(5);
+  });
 });
