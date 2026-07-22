@@ -13,6 +13,7 @@
   "dependencies": {
     "@duckdb/node-api": "^1.5.4-r.1",
     "@serwist/next": "^9.5.11",
+    "idb": "^8.0.3",
     "next": "16.2.10",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -28,6 +29,7 @@
     "@vitejs/plugin-react": "^6.0.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "fake-indexeddb": "^6.2.5",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"

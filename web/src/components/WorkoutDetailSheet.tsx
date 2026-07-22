@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useState, useTransition } from "react";
 import { getWorkoutDetailAction, logNiggleAction, type WorkoutDetail } from "@/lib/workoutActions";
+import { createGymSessionForActivityAction } from "@/lib/gymActions";
 import { fmtPace } from "@/lib/shared";
 import type { ActivityDetailRow } from "@/lib/metrics";
 import { StatCard } from "@/components/StatCard";
+import { GymSessionDetailSheet } from "@/components/gym/GymSessionDetailSheet";
 
 const ZONE_LABELS: Array<[keyof ActivityDetailRow, string]> = [
   ["z1_min", "Z1"],
@@ -31,6 +33,8 @@ export function WorkoutDetailSheet({ activityId, onClose }: { activityId: number
   const [detail, setDetail] = useState<WorkoutDetail | null | undefined>(undefined);
   const [niggleError, setNiggleError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [gymSheetSessionId, setGymSheetSessionId] = useState<number | null>(null);
+  const [gymError, setGymError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,7 +62,21 @@ export function WorkoutDetailSheet({ activityId, onClose }: { activityId: number
   }
 
   const isRunning = detail?.activity.category === "running";
+  const isGym = detail?.activity.category === "gym";
   const hasZoneData = detail?.activity.z1_min != null;
+
+  function handleLogGymSession() {
+    if (!detail) return;
+    setGymError(null);
+    startTransition(async () => {
+      const result = await createGymSessionForActivityAction(detail.activity.id);
+      if ("error" in result) {
+        setGymError(result.error);
+        return;
+      }
+      setGymSheetSessionId(result.sessionId);
+    });
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
@@ -119,6 +137,30 @@ export function WorkoutDetailSheet({ activityId, onClose }: { activityId: number
 
             {detail.activity.gear_name && (
               <p className="mt-2 text-xs text-neutral-500">Shoe: {detail.activity.gear_name}</p>
+            )}
+
+            {isGym && (
+              <div className="mt-3">
+                {detail.gymSession ? (
+                  <button
+                    type="button"
+                    onClick={() => setGymSheetSessionId(detail.gymSession!.id)}
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700"
+                  >
+                    View gym session ({detail.gymSession.sets.length} sets)
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={handleLogGymSession}
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700"
+                  >
+                    Log sets for this workout
+                  </button>
+                )}
+                {gymError && <p className="mt-2 text-xs text-red-600">{gymError}</p>}
+              </div>
             )}
 
             {detail.nutritionLogs.length > 0 && (
@@ -182,6 +224,20 @@ export function WorkoutDetailSheet({ activityId, onClose }: { activityId: number
           Close
         </button>
       </div>
+
+      {gymSheetSessionId != null && (
+        // Stop propagation so a click on the nested sheet's own backdrop
+        // doesn't also bubble up to this sheet's outer onClose={onClose}.
+        <div onClick={(e) => e.stopPropagation()}>
+          <GymSessionDetailSheet
+            sessionId={gymSheetSessionId}
+            onClose={() => {
+              setGymSheetSessionId(null);
+              getWorkoutDetailAction(activityId).then(setDetail);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

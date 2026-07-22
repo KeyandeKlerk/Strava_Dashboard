@@ -10,4 +10,5 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/aerobic", label: "Aerobic" },
   { href: "/race-prep", label: "Race" },
   { href: "/plan-history", label: "History" },
+  { href: "/gym", label: "Gym" },
 ];

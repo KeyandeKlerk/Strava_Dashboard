@@ -29,6 +29,11 @@ export default function manifest(): MetadataRoute.Manifest {
         url: "/plan-history",
         icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }],
       },
+      {
+        name: "Gym",
+        url: "/gym",
+        icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }],
+      },
     ],
   };
 }

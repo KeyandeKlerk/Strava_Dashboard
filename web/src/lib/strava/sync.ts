@@ -10,6 +10,7 @@ import {
   upsertGear,
   type ActivityInput,
 } from "../db/mutations";
+import { correlateGymSessionsToActivities } from "../db/gymMutations";
 import { getActivities, getActivityById, getGear, refreshAccessToken } from "./client";
 import { parseActivity, type RawStravaActivity } from "./parser";
 import { detectAndAnalyseRace } from "./raceDetection";
@@ -105,6 +106,7 @@ export async function runSync(conn: DuckDBConnection): Promise<{ processedCount:
   const nowTs = Math.floor(Date.now() / 1000);
   await setLastSynced(conn, nowTs);
   await correlateActivitiesToPlan(conn);
+  await correlateGymSessionsToActivities(conn);
   console.log(`Sync complete. ${rawActivities.length} activities processed.`);
   await runBackfill(conn);
 

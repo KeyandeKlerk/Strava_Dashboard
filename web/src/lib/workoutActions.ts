@@ -2,6 +2,7 @@
 import { updateTag } from "next/cache";
 import { getConnection } from "./db/client";
 import { addNiggleLog } from "./db/mutations";
+import { getGymSessionByActivityId, type GymSessionDetail } from "./db/gymMutations";
 import {
   getActivityDetail,
   niggleLogsForActivity,
@@ -16,6 +17,7 @@ export interface WorkoutDetail {
   activity: ActivityDetailRow;
   nutritionLogs: NutritionLogRow[];
   niggleLogs: NiggleLogRow[];
+  gymSession: GymSessionDetail | null;
 }
 
 export async function getWorkoutDetailAction(activityId: number): Promise<WorkoutDetail | null> {
@@ -23,11 +25,12 @@ export async function getWorkoutDetailAction(activityId: number): Promise<Workou
   const activity = await getActivityDetail(conn, activityId);
   if (!activity) return null;
 
-  const [nutritionLogs, niggleLogs] = await Promise.all([
+  const [nutritionLogs, niggleLogs, gymSession] = await Promise.all([
     nutritionLogsForActivity(conn, activityId),
     niggleLogsForActivity(conn, activityId),
+    activity.category === "gym" ? getGymSessionByActivityId(conn, activityId) : Promise.resolve(null),
   ]);
-  return { activity, nutritionLogs, niggleLogs };
+  return { activity, nutritionLogs, niggleLogs, gymSession };
 }
 
 export interface NiggleActionState {

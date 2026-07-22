@@ -8,6 +8,15 @@
 import { unstable_cache } from "next/cache";
 import { getConnection, queryRow } from "./db/client";
 import { getAllRaceEvents, getPrimaryGoalRace } from "./db/mutations";
+import { listGymExercises } from "./db/gymMutations";
+import {
+  exerciseProgression,
+  gymSessionsPerWeek,
+  muscleGroupFrequency,
+  muscleGroupWeeklyVolume,
+  personalRecords,
+  weeklyGymVolume,
+} from "./gymMetrics";
 import {
   acwrHistory,
   backToBackRuns,
@@ -416,5 +425,57 @@ export const getRacePrepPageData = unstable_cache(
     };
   },
   ["race-prep-page-data"],
+  { tags: [DASHBOARD_DATA_TAG] },
+);
+
+export const getGymInsightsPageData = unstable_cache(
+  async () => {
+    const conn = await getConnection();
+    const [weeklyVolume, muscleVolume, sessionsPerWeek, records, muscleFrequency, exercises] = await Promise.all([
+      weeklyGymVolume(conn),
+      muscleGroupWeeklyVolume(conn),
+      gymSessionsPerWeek(conn),
+      personalRecords(conn),
+      muscleGroupFrequency(conn),
+      listGymExercises(conn),
+    ]);
+
+    const weeklyVolumeSorted = [...weeklyVolume].sort((a, b) => (a.week_start < b.week_start ? -1 : 1));
+    const sessionsPerWeekSorted = [...sessionsPerWeek].sort((a, b) => (a.week_start < b.week_start ? -1 : 1));
+
+    // Pivot {week_start, muscle_group, total_volume_kg} rows into one row per
+    // week with a column per muscle group, since Recharts' stacked <Bar>
+    // needs one dataKey per series rather than a long/tidy row shape.
+    const muscleGroups = [...new Set(muscleVolume.map((v) => v.muscle_group))].sort();
+    const byWeek = new Map<string, Record<string, number>>();
+    for (const row of muscleVolume) {
+      const existing = byWeek.get(row.week_start) ?? {};
+      existing[row.muscle_group] = row.total_volume_kg;
+      byWeek.set(row.week_start, existing);
+    }
+    const muscleVolumePivoted = [...byWeek.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : 1))
+      .map(([week_start, values]) => ({ week_start, ...values }));
+
+    // Default "hero" exercise for the progression chart: the alphabetically
+    // first exercise with any logged history (personalRecords only includes
+    // exercises with at least one set) — not necessarily the most-logged
+    // one. Anything else is fetched on demand via getExerciseProgressionAction.
+    const defaultExerciseId = records[0]?.exercise_id ?? null;
+    const defaultProgression = defaultExerciseId != null ? await exerciseProgression(conn, defaultExerciseId) : [];
+
+    return {
+      weeklyVolume: weeklyVolumeSorted,
+      muscleGroups,
+      muscleVolumePivoted,
+      sessionsPerWeek: sessionsPerWeekSorted,
+      records,
+      muscleFrequency,
+      exercises,
+      defaultExerciseId,
+      defaultProgression,
+    };
+  },
+  ["gym-insights-page-data"],
   { tags: [DASHBOARD_DATA_TAG] },
 );
