@@ -12,6 +12,7 @@ import {
   getPrimaryGoalRace,
   moveDailySession,
   queryPlanDay,
+  updateGearName,
   upsertActivity,
   upsertNutritionTargets,
   upsertRaceEvent,
@@ -344,5 +345,38 @@ describe("getPrimaryGoalRace", () => {
 
     const goal = await getPrimaryGoalRace<{ name: string }>(conn);
     expect(goal).toBeUndefined();
+  });
+});
+
+describe("updateGearName", () => {
+  it("writes the resolved gear name onto matching activities", async () => {
+    await upsertActivity(conn, {
+      id: 9101,
+      name: "Easy Run",
+      start_date_local: "2026-07-20T06:00:00",
+      gear_id: "g1",
+    });
+    await upsertActivity(conn, {
+      id: 9102,
+      name: "Long Run",
+      start_date_local: "2026-07-21T06:00:00",
+      gear_id: "g2",
+    });
+
+    await updateGearName(conn, "g1", "Nike Pegasus 39");
+
+    const row1 = await queryRow<{ gear_name: string | null }>(
+      conn,
+      "SELECT gear_name FROM activities WHERE id = $id",
+      { id: 9101 },
+    );
+    const row2 = await queryRow<{ gear_name: string | null }>(
+      conn,
+      "SELECT gear_name FROM activities WHERE id = $id",
+      { id: 9102 },
+    );
+
+    expect(row1?.gear_name).toBe("Nike Pegasus 39");
+    expect(row2?.gear_name).toBeNull();
   });
 });

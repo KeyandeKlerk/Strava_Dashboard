@@ -445,6 +445,13 @@ export async function upsertGear(
   );
 }
 
+export async function updateGearName(conn: DuckDBConnection, gearId: string, gearName: string): Promise<void> {
+  await conn.run("UPDATE activities SET gear_name = $gear_name WHERE gear_id = $gear_id", {
+    gear_name: gearName,
+    gear_id: gearId,
+  });
+}
+
 export interface RaceAnalysisInput {
   race_event_id: number;
   activity_id: number;
