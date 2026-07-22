@@ -86,6 +86,10 @@ export async function runSync(conn: DuckDBConnection): Promise<{ processedCount:
     }
   }
 
+  // Must run before refreshGear below — refreshGear is what restores the
+  // correct gear_name for any activity upserted here, since parseActivity
+  // never sets gear_name itself. Reordering these two calls would silently
+  // null out gear_name on every refreshed activity.
   const refreshedActivities = await refreshRecentActivities(
     conn,
     (id) => getActivityById(accessToken, id),
