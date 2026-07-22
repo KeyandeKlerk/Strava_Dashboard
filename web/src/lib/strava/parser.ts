@@ -17,6 +17,7 @@ export interface RawStravaActivity {
   average_heartrate?: number;
   max_heartrate?: number;
   gear_id?: string;
+  description?: string;
 }
 
 export function parseActivity(raw: RawStravaActivity): ActivityInput {
@@ -55,5 +56,6 @@ export function parseActivity(raw: RawStravaActivity): ActivityInput {
     relative_effort: relativeEffort,
     load_score: Math.round(loadScore * 100) / 100,
     gear_id: raw.gear_id ?? null,
+    description: raw.description ?? null,
   };
 }
