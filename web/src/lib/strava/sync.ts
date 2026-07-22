@@ -14,6 +14,26 @@ import { parseActivity } from "./parser";
 import { detectAndAnalyseRace } from "./raceDetection";
 import { runBackfill } from "./backfill";
 
+export interface EditableActivityFields {
+  name?: string | null;
+  description?: string | null;
+  gear_id?: string | null;
+}
+
+export function hasEditableChanges(stored: EditableActivityFields, fetched: EditableActivityFields): boolean {
+  return (
+    (stored.name ?? null) !== (fetched.name ?? null) ||
+    (stored.description ?? null) !== (fetched.description ?? null) ||
+    (stored.gear_id ?? null) !== (fetched.gear_id ?? null)
+  );
+}
+
+export function getRecentRefreshCount(): number {
+  const raw = process.env.STRAVA_RECENT_REFRESH_COUNT;
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 5;
+}
+
 export async function runSync(conn: DuckDBConnection): Promise<{ processedCount: number }> {
   const lastSynced = await getLastSynced(conn);
 
