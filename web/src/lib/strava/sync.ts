@@ -10,7 +10,7 @@ import {
   type ActivityInput,
 } from "../db/mutations";
 import { getActivities, getGear, refreshAccessToken } from "./client";
-import { parseActivity } from "./parser";
+import { parseActivity, type RawStravaActivity } from "./parser";
 import { detectAndAnalyseRace } from "./raceDetection";
 import { runBackfill } from "./backfill";
 
@@ -32,6 +32,34 @@ export function getRecentRefreshCount(): number {
   const raw = process.env.STRAVA_RECENT_REFRESH_COUNT;
   const parsed = raw ? Number(raw) : NaN;
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 5;
+}
+
+export async function refreshRecentActivities(
+  conn: DuckDBConnection,
+  fetchDetail: (id: number) => Promise<RawStravaActivity>,
+  count: number,
+): Promise<ActivityInput[]> {
+  const recent = await queryRows<{ id: number; name: string | null; description: string | null; gear_id: string | null }>(
+    conn,
+    "SELECT id, name, description, gear_id FROM activities ORDER BY start_date_local DESC LIMIT $count",
+    { count },
+  );
+
+  const changed: ActivityInput[] = [];
+  for (const stored of recent) {
+    try {
+      const raw = await fetchDetail(stored.id);
+      const fetched = parseActivity(raw);
+      if (hasEditableChanges(stored, fetched)) {
+        await upsertActivity(conn, fetched);
+        changed.push(fetched);
+      }
+    } catch (err) {
+      console.error(`Failed to refresh recent activity ${stored.id}:`, err);
+    }
+  }
+
+  return changed;
 }
 
 export async function runSync(conn: DuckDBConnection): Promise<{ processedCount: number }> {
