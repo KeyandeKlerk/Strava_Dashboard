@@ -290,6 +290,38 @@ describe("upsertRaceEvent", () => {
   });
 });
 
+describe("upsertActivity", () => {
+  it("persists and updates description", async () => {
+    await upsertActivity(conn, {
+      id: 9001,
+      name: "Morning Run",
+      start_date_local: "2026-07-20T06:00:00",
+      description: "Felt great",
+    });
+
+    let row = await queryRow<{ description: string | null }>(
+      conn,
+      "SELECT description FROM activities WHERE id = $id",
+      { id: 9001 },
+    );
+    expect(row?.description).toBe("Felt great");
+
+    await upsertActivity(conn, {
+      id: 9001,
+      name: "Morning Run",
+      start_date_local: "2026-07-20T06:00:00",
+      description: "Edited on Strava",
+    });
+
+    row = await queryRow<{ description: string | null }>(
+      conn,
+      "SELECT description FROM activities WHERE id = $id",
+      { id: 9001 },
+    );
+    expect(row?.description).toBe("Edited on Strava");
+  });
+});
+
 describe("getPrimaryGoalRace", () => {
   it("picks the A-priority race over a nearer B-priority race", async () => {
     await upsertRaceEvent(conn, { name: "B Race", race_date: "2027-05-01", distance_km: 21.1, priority: "B" });
