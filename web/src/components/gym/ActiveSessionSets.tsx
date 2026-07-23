@@ -19,11 +19,11 @@ export function ActiveSessionSets({ sets }: { sets: CachedSet[] }) {
   }
 
   return (
-    <div className="mt-3 space-y-3">
+    <div className="mt-3 space-y-2">
       {[...byExercise.entries()].map(([exerciseId, exerciseSets]) => {
         const exercise = exercises.find((e) => e.id === exerciseId);
         return (
-          <div key={exerciseId}>
+          <div key={exerciseId} className="rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
             <p className="text-xs font-medium text-neutral-500">{exercise?.name ?? "Unknown exercise"}</p>
             {exerciseSets
               .sort((a, b) => a.setNumber - b.setNumber)
