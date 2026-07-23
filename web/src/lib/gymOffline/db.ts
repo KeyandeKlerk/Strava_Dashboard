@@ -56,6 +56,11 @@ export interface CachedRecentSession {
   total_volume_kg: number;
 }
 
+export interface CachedPlanDay {
+  dayOfWeek: string; // full weekday name, e.g. "Monday"
+  exerciseIds: number[]; // in position order
+}
+
 interface GymOfflineSchema extends DBSchema {
   pendingMutations: {
     key: string;
@@ -79,12 +84,16 @@ interface GymOfflineSchema extends DBSchema {
     key: number;
     value: CachedRecentSession;
   };
+  planCache: {
+    key: string;
+    value: CachedPlanDay;
+  };
 }
 
 export type GymOfflineDb = IDBPDatabase<GymOfflineSchema>;
 
 const DB_NAME = "gym-offline";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<GymOfflineDb> | null = null;
 
@@ -92,13 +101,26 @@ export function getGymOfflineDb(): Promise<GymOfflineDb> {
   if (!dbPromise) {
     dbPromise = openDB<GymOfflineSchema>(DB_NAME, DB_VERSION, {
       upgrade(db) {
-        const mutations = db.createObjectStore("pendingMutations", { keyPath: "clientUuid" });
-        mutations.createIndex("by-createdAt", "createdAt");
-        db.createObjectStore("exercisesCache", { keyPath: "id" });
-        db.createObjectStore("sessionsCache", { keyPath: "clientUuid" });
-        const sets = db.createObjectStore("setsCache", { keyPath: "clientUuid" });
-        sets.createIndex("by-sessionClientUuid", "sessionClientUuid");
-        db.createObjectStore("recentSessionsCache", { keyPath: "id" });
+        if (!db.objectStoreNames.contains("pendingMutations")) {
+          const mutations = db.createObjectStore("pendingMutations", { keyPath: "clientUuid" });
+          mutations.createIndex("by-createdAt", "createdAt");
+        }
+        if (!db.objectStoreNames.contains("exercisesCache")) {
+          db.createObjectStore("exercisesCache", { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains("sessionsCache")) {
+          db.createObjectStore("sessionsCache", { keyPath: "clientUuid" });
+        }
+        if (!db.objectStoreNames.contains("setsCache")) {
+          const sets = db.createObjectStore("setsCache", { keyPath: "clientUuid" });
+          sets.createIndex("by-sessionClientUuid", "sessionClientUuid");
+        }
+        if (!db.objectStoreNames.contains("recentSessionsCache")) {
+          db.createObjectStore("recentSessionsCache", { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains("planCache")) {
+          db.createObjectStore("planCache", { keyPath: "dayOfWeek" });
+        }
       },
     });
   }
@@ -200,4 +222,15 @@ export async function replaceRecentSessionsCache(db: GymOfflineDb, sessions: Cac
 
 export async function listRecentSessionsCache(db: GymOfflineDb): Promise<CachedRecentSession[]> {
   return db.getAll("recentSessionsCache");
+}
+
+export async function replacePlanCache(db: GymOfflineDb, days: CachedPlanDay[]): Promise<void> {
+  const tx = db.transaction("planCache", "readwrite");
+  await tx.store.clear();
+  for (const day of days) await tx.store.put(day);
+  await tx.done;
+}
+
+export async function listPlanCache(db: GymOfflineDb): Promise<CachedPlanDay[]> {
+  return db.getAll("planCache");
 }
