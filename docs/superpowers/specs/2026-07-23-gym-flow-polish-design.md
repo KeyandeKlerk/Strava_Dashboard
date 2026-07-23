@@ -79,20 +79,26 @@ in `web/src/lib/db/schema.ts`):
 CREATE SEQUENCE IF NOT EXISTS gym_plan_exercises_id_seq START 1
 CREATE TABLE IF NOT EXISTS gym_plan_exercises (
   id INTEGER PRIMARY KEY DEFAULT nextval('gym_plan_exercises_id_seq'),
-  day_of_week INTEGER NOT NULL,   -- ISO: 1=Mon .. 7=Sun
+  day_of_week VARCHAR NOT NULL,   -- full English weekday name, e.g. "Monday"
   exercise_id INTEGER NOT NULL,
   position INTEGER NOT NULL,      -- display/queue order within the day
   created_at TIMESTAMP DEFAULT current_timestamp
 )
 ```
 
+**Correction from initial draft**: `day_of_week` is `VARCHAR` storing the full weekday name, not an
+integer — this matches the existing `training_plan_daily.day_of_week` column (`web/src/lib/db/schema.ts:62`)
+and the `toLocaleDateString("en-US", { weekday: "long" })` idiom already used to compute it
+(`web/src/lib/db/mutations.ts:620`, `web/src/lib/planActions.ts:54`), rather than inventing a new
+numeric day-of-week convention for this one table.
+
 Single global recurring template — no plan-owner column, matching every other table in this schema.
 A day with zero rows is a rest day / has no plan. `web/src/lib/db/gymMutations.ts` gains:
 
-- `getWeeklyPlan(conn): Promise<Record<number, GymExerciseRow[]>>` — one query joining
+- `getWeeklyPlan(conn): Promise<Record<string, GymExerciseRow[]>>` — one query joining
   `gym_plan_exercises` to `gym_exercises`, grouped by `day_of_week`, ordered by `position`.
-- `setPlanForDay(conn, dayOfWeek, exerciseIds: number[]): Promise<void>` — delete-then-insert in a
-  single transaction (`DELETE FROM gym_plan_exercises WHERE day_of_week = $day`, then one insert
+- `setPlanForDay(conn, dayOfWeek: string, exerciseIds: number[]): Promise<void>` — delete-then-insert
+  in a single transaction (`DELETE FROM gym_plan_exercises WHERE day_of_week = $day`, then one insert
   per id with its array index as `position`). Idempotent replace, same idiom as
   `upsertGymSession`'s replace-on-conflict, chosen over a diff/patch approach because a day's plan
   is always edited as a whole list (add/remove/reorder all go through the same builder screen).
@@ -104,17 +110,18 @@ Confirmed via mockup review:
 
 - A horizontal day-tab row (Mon..Sun), each tab showing an exercise count badge (e.g. "Mon · 4"),
   no badge for rest days.
-- Below it, the selected day's exercises as a reorderable list (drag handle, remove per row) plus
-  an "+ Add exercise to {Day}" button that opens the same search/muscle-group picker UI already
-  used by `ExercisePicker`.
+- Below it, the selected day's exercises as a reorderable list (↑/↓ buttons per row, remove per
+  row) plus an "+ Add exercise to {Day}" button that opens the same search/muscle-group picker UI
+  already used by `ExercisePicker`.
 - Since this is online-only editing (confirmed), it uses plain Next.js server actions in
   `web/src/lib/gymActions.ts` (same pattern as `addCustomExerciseAction`), not the offline queue —
   `getWeeklyPlanAction()`, `setPlanForDayAction(dayOfWeek, exerciseIds)`. No offline queuing, no
   optimistic cache writes; a straightforward fetch-on-mount, mutate-then-refetch client component.
-- Reordering is drag-and-drop reordering a plain array in local state before calling
-  `setPlanForDayAction` with the full new order — no reason to introduce a drag library; a
-  handful of rows (rarely more than 6-8 exercises/day) works fine with pointer-based
-  up/down reordering (drag using native HTML5 drag events, no dependency).
+- Reordering uses ↑/↓ buttons per row (swap with the adjacent entry in local array state), not
+  drag-and-drop — HTML5 drag-and-drop doesn't work reliably with touch on iOS Safari, the user's
+  primary device, so a library would be needed to get real drag behavior there. ↑/↓ buttons need
+  no dependency and work identically on touch and desktop. The reordered array is sent to
+  `setPlanForDayAction` as a whole on each change.
 
 ### 4. Session queue (chip row)
 
@@ -124,8 +131,9 @@ exercise-selection mechanics — matches this codebase's existing pattern of sma
 gym components).
 
 - **State**: `queueKeys: string[]` (stable keys per §1) plus `currentKey: string | null`.
-- **Seeding**: on `startSession`, compute JS `Date`'s ISO day-of-week for `sessionDate` and look up
-  the cached `planByDay[dayOfWeek]` (see §5). If present, `queueKeys` seeds to those exercises' keys
+- **Seeding**: on `startSession`, compute `sessionDate`'s weekday name via the existing
+  `toLocaleDateString("en-US", { weekday: "long" })` idiom and look up the cached
+  `planByDay[dayName]` (see §5). If present, `queueKeys` seeds to those exercises' keys
   in order and `currentKey` is the first one. If absent (rest day / no plan for that day), `queueKeys`
   starts empty and the full `ExercisePicker` renders directly — picking an exercise pushes it as the
   first queue entry. This means plan-driven and ad-hoc sessions share one code path; there's no
@@ -151,11 +159,11 @@ gym components).
 
 ```ts
 interface CachedPlanDay {
-  dayOfWeek: number;       // 1=Mon..7=Sun
+  dayOfWeek: string;       // full weekday name, e.g. "Monday"
   exerciseIds: number[];   // in position order
 }
 // ...
-planCache: { key: number; value: CachedPlanDay };
+planCache: { key: string; value: CachedPlanDay };
 ```
 
 **Important migration detail**: the existing `upgrade(db)` callback in `db.ts:93-103` unconditionally
@@ -170,11 +178,11 @@ if (!db.objectStoreNames.contains("exercisesCache")) db.createObjectStore("exerc
 ```
 
 `/api/gym/bootstrap` (`web/src/app/api/gym/bootstrap/route.ts`) gains a `planByDay` field
-(`Record<number, number[]>`, from `getWeeklyPlan`, reshaped to just exercise ids per day since the
+(`Record<string, number[]>`, from `getWeeklyPlan`, reshaped to just exercise ids per day since the
 client already caches full exercise rows separately). `GymOfflineProvider`'s `bootstrap()`
 (`context.tsx:115-132`) writes it into `planCache` via a new `replacePlanCache(db, entries)` helper,
 same wholesale-replace pattern as `replaceExercisesCache`. `useGymOffline` exposes
-`planByDay: Record<number, number[]>` read from `planCache` on `refresh()`, alongside the existing
+`planByDay: Record<string, number[]>` read from `planCache` on `refresh()`, alongside the existing
 `exercises`/`sessions`/`sets`.
 
 ### 6. Visual polish
