@@ -1,11 +1,9 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useGymOffline } from "@/lib/gymOffline/context";
-import { ExercisePicker } from "./ExercisePicker";
-import { SetEntryForm } from "./SetEntryForm";
+import { SessionExerciseQueue } from "./SessionExerciseQueue";
 import { ActiveSessionSets } from "./ActiveSessionSets";
 import { WeightUnitToggle } from "./WeightUnitToggle";
-import type { CachedExercise } from "@/lib/gymOffline/db";
 
 function todayIso(): string {
   const now = new Date();
@@ -15,9 +13,12 @@ function todayIso(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function weekdayNameFor(sessionDate: string): string {
+  return new Date(`${sessionDate}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" });
+}
+
 export function LiveSessionPanel() {
   const { sessions, sets, pendingCount, isOnline, startSession, endSession } = useGymOffline();
-  const [selectedExercise, setSelectedExercise] = useState<CachedExercise | null>(null);
 
   // The most recently started session that hasn't been ended yet — durable
   // across reloads/app kills since sessionsCache lives in IndexedDB, not
@@ -32,12 +33,6 @@ export function LiveSessionPanel() {
     if (!activeSession) return [];
     return sets.filter((s) => s.sessionClientUuid === activeSession.clientUuid);
   }, [sets, activeSession]);
-
-  const nextSetNumber = useMemo(() => {
-    if (!selectedExercise) return 1;
-    const countForExercise = activeSessionSets.filter((s) => s.exerciseId === selectedExercise.id).length;
-    return countForExercise + 1;
-  }, [activeSessionSets, selectedExercise]);
 
   return (
     <div>
@@ -65,16 +60,11 @@ export function LiveSessionPanel() {
           <ActiveSessionSets sets={activeSessionSets} />
 
           <div className="mt-3">
-            {selectedExercise ? (
-              <SetEntryForm
-                sessionClientUuid={activeSession.clientUuid}
-                exercise={selectedExercise}
-                nextSetNumber={nextSetNumber}
-                onClear={() => setSelectedExercise(null)}
-              />
-            ) : (
-              <ExercisePicker onSelect={setSelectedExercise} />
-            )}
+            <SessionExerciseQueue
+              sessionClientUuid={activeSession.clientUuid}
+              activeSessionSets={activeSessionSets}
+              planDayName={weekdayNameFor(activeSession.sessionDate)}
+            />
           </div>
 
           <button

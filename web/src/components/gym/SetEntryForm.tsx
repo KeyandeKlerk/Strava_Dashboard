@@ -11,12 +11,16 @@ export function SetEntryForm({
   sessionClientUuid,
   exercise,
   nextSetNumber,
-  onClear,
+  onSwap,
+  showNext,
+  onNext,
 }: {
   sessionClientUuid: string;
   exercise: CachedExercise;
   nextSetNumber: number;
-  onClear: () => void;
+  onSwap: () => void;
+  showNext: boolean;
+  onNext: () => void;
 }) {
   const { logSet } = useGymOffline();
   const { unit, toKg } = useWeightUnit();
@@ -47,11 +51,14 @@ export function SetEntryForm({
   }
 
   return (
-    <form action={handleSubmit} className="mt-2 rounded-md border border-neutral-200 p-3 dark:border-neutral-800">
+    <form
+      action={handleSubmit}
+      className="rounded-xl border border-neutral-200 p-3 shadow-sm dark:border-neutral-800"
+    >
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium">{exercise.name}</p>
-        <button type="button" onClick={onClear} className="text-xs text-neutral-500">
-          Change
+        <button type="button" onClick={onSwap} className="text-xs text-neutral-500 underline">
+          Swap
         </button>
       </div>
       <div className="mt-2 flex gap-2">
@@ -80,13 +87,24 @@ export function SetEntryForm({
           className={FIELD_CLASS}
         />
       </div>
-      <button
-        type="submit"
-        disabled={isSaving}
-        className="mt-2 w-full rounded-md bg-neutral-900 px-3 py-2 text-sm text-white dark:bg-neutral-100 dark:text-neutral-900"
-      >
-        Log set {nextSetNumber}
-      </button>
+      <div className="mt-2 flex gap-2">
+        <button
+          type="submit"
+          disabled={isSaving}
+          className="flex-1 rounded-md bg-neutral-900 px-3 py-2 text-sm text-white dark:bg-neutral-100 dark:text-neutral-900"
+        >
+          Log set {nextSetNumber}
+        </button>
+        {showNext && (
+          <button
+            type="button"
+            onClick={onNext}
+            className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700"
+          >
+            Next exercise →
+          </button>
+        )}
+      </div>
     </form>
   );
 }
