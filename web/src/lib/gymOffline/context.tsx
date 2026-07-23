@@ -14,6 +14,7 @@ import {
   listAllSetsCache,
   listExercisesCache,
   listPendingMutations,
+  listPlanCache,
   listRecentSessionsCache,
   listSessionsCache,
   listSetsForSession,
@@ -22,6 +23,7 @@ import {
   putSessionCache,
   putSetCache,
   replaceExercisesCache,
+  replacePlanCache,
   replaceRecentSessionsCache,
   type CachedExercise,
   type CachedRecentSession,
@@ -53,6 +55,7 @@ interface GymOfflineContextValue {
   sessions: CachedSession[];
   sets: CachedSet[];
   recentSessions: CachedRecentSession[];
+  planByDay: Record<string, number[]>;
   pendingCount: number;
   isOnline: boolean;
   lastFlush: FlushResult | null;
@@ -78,6 +81,7 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<CachedSession[]>([]);
   const [sets, setSets] = useState<CachedSet[]>([]);
   const [recentSessions, setRecentSessions] = useState<CachedRecentSession[]>([]);
+  const [planByDay, setPlanByDay] = useState<Record<string, number[]>>({});
   const [pendingCount, setPendingCount] = useState(0);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [lastFlush, setLastFlush] = useState<FlushResult | null>(null);
@@ -86,18 +90,20 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     const db = await getGymOfflineDb();
-    const [exerciseRows, sessionRows, setRows, recentRows, pending] = await Promise.all([
+    const [exerciseRows, sessionRows, setRows, recentRows, pending, planRows] = await Promise.all([
       listExercisesCache(db),
       listSessionsCache(db),
       listAllSetsCache(db),
       listRecentSessionsCache(db),
       listPendingMutations(db),
+      listPlanCache(db),
     ]);
     setExercises(exerciseRows);
     setSessions(sessionRows);
     setSets(setRows);
     setRecentSessions(recentRows);
     setPendingCount(pending.length);
+    setPlanByDay(Object.fromEntries(planRows.map((p) => [p.dayOfWeek, p.exerciseIds])));
   }, []);
 
   const flush = useCallback(async () => {
@@ -117,7 +123,11 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
     try {
       const res = await fetch("/api/gym/bootstrap");
       if (!res.ok) return;
-      const body = (await res.json()) as { exercises: CachedExercise[]; recentSessions: CachedRecentSession[] };
+      const body = (await res.json()) as {
+        exercises: CachedExercise[];
+        recentSessions: CachedRecentSession[];
+        planByDay: Record<string, number[]>;
+      };
       const db = await getGymOfflineDb();
       // Only the curated/synced library is replaced wholesale — locally
       // pending custom exercises (negative placeholder ids) aren't part of
@@ -126,6 +136,10 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
       const pendingCustom = (await listExercisesCache(db)).filter((e) => e.id < 0);
       await replaceExercisesCache(db, [...body.exercises, ...pendingCustom]);
       await replaceRecentSessionsCache(db, body.recentSessions);
+      await replacePlanCache(
+        db,
+        Object.entries(body.planByDay).map(([dayOfWeek, exerciseIds]) => ({ dayOfWeek, exerciseIds })),
+      );
     } catch {
       // offline — cache stays as-is
     }
@@ -311,6 +325,7 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
         sessions,
         sets,
         recentSessions,
+        planByDay,
         pendingCount,
         isOnline,
         lastFlush,
