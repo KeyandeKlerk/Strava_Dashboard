@@ -10,8 +10,10 @@ import {
   deleteGymSet,
   getGymSessionByActivityId,
   getGymSessionDetail,
+  getWeeklyPlan,
   listGymExercises,
   listRecentGymSessions,
+  setPlanForDay,
   upsertGymSession,
 } from "./gymMutations";
 
@@ -279,5 +281,48 @@ describe("correlateGymSessionsToActivities", () => {
     await correlateGymSessionsToActivities(conn);
     const detail = await getGymSessionDetail(conn, session.id);
     expect(detail?.activity_id).toBeNull();
+  });
+});
+
+describe("getWeeklyPlan / setPlanForDay", () => {
+  it("returns an empty plan when nothing has been set", async () => {
+    const plan = await getWeeklyPlan(conn);
+    expect(plan).toEqual({});
+  });
+
+  it("sets and retrieves an ordered exercise list for a day", async () => {
+    const exercises = await listGymExercises(conn);
+    const squat = exercises.find((e) => e.name === "Barbell Back Squat")!;
+    const legPress = exercises.find((e) => e.name === "Leg Press")!;
+
+    await setPlanForDay(conn, "Monday", [squat.id, legPress.id]);
+
+    const plan = await getWeeklyPlan(conn);
+    expect(plan["Monday"].map((e) => e.name)).toEqual(["Barbell Back Squat", "Leg Press"]);
+  });
+
+  it("replaces (not appends to) a day's plan on a second call", async () => {
+    const exercises = await listGymExercises(conn);
+    const squat = exercises.find((e) => e.name === "Barbell Back Squat")!;
+    const curl = exercises.find((e) => e.name === "Barbell Curl")!;
+
+    await setPlanForDay(conn, "Monday", [squat.id]);
+    await setPlanForDay(conn, "Monday", [curl.id]);
+
+    const plan = await getWeeklyPlan(conn);
+    expect(plan["Monday"].map((e) => e.name)).toEqual(["Barbell Curl"]);
+  });
+
+  it("leaves other days untouched", async () => {
+    const exercises = await listGymExercises(conn);
+    const squat = exercises.find((e) => e.name === "Barbell Back Squat")!;
+    const curl = exercises.find((e) => e.name === "Barbell Curl")!;
+
+    await setPlanForDay(conn, "Monday", [squat.id]);
+    await setPlanForDay(conn, "Wednesday", [curl.id]);
+
+    const plan = await getWeeklyPlan(conn);
+    expect(plan["Monday"].map((e) => e.name)).toEqual(["Barbell Back Squat"]);
+    expect(plan["Wednesday"].map((e) => e.name)).toEqual(["Barbell Curl"]);
   });
 });

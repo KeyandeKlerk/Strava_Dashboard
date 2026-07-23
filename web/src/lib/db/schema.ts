@@ -171,6 +171,14 @@ export const SCHEMA_STATEMENTS: readonly string[] = [
     reps INTEGER NOT NULL,
     logged_at TIMESTAMP DEFAULT current_timestamp
   )`,
+  `CREATE SEQUENCE IF NOT EXISTS gym_plan_exercises_id_seq START 1`,
+  `CREATE TABLE IF NOT EXISTS gym_plan_exercises (
+    id INTEGER PRIMARY KEY DEFAULT nextval('gym_plan_exercises_id_seq'),
+    day_of_week VARCHAR NOT NULL,
+    exercise_id INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT current_timestamp
+  )`,
   ...buildGymExerciseSeedStatements(),
 ];
 

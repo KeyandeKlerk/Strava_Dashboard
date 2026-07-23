@@ -269,3 +269,49 @@ export async function correlateGymSessionsToActivities(conn: DuckDBConnection): 
   );
   return Number(row?.count ?? 0);
 }
+
+export async function getWeeklyPlan(conn: DuckDBConnection): Promise<Record<string, GymExerciseRow[]>> {
+  const rows = await queryRows<{
+    day_of_week: string;
+    id: number;
+    client_uuid: string | null;
+    name: string;
+    muscle_group: string;
+    equipment: string | null;
+    is_custom: boolean;
+  }>(
+    conn,
+    `SELECT gpe.day_of_week, ge.id, ge.client_uuid, ge.name, ge.muscle_group, ge.equipment, ge.is_custom
+     FROM gym_plan_exercises gpe
+     JOIN gym_exercises ge ON ge.id = gpe.exercise_id
+     ORDER BY gpe.day_of_week, gpe.position`,
+  );
+
+  const byDay: Record<string, GymExerciseRow[]> = {};
+  for (const row of rows) {
+    const list = byDay[row.day_of_week] ?? [];
+    list.push({
+      id: row.id,
+      client_uuid: row.client_uuid,
+      name: row.name,
+      muscle_group: row.muscle_group,
+      equipment: row.equipment,
+      is_custom: row.is_custom,
+    });
+    byDay[row.day_of_week] = list;
+  }
+  return byDay;
+}
+
+// Whole-list replace, not a diff — a day's plan is always edited as a complete
+// ordered list from the /gym/plan builder, so there's no partial-update case
+// to support.
+export async function setPlanForDay(conn: DuckDBConnection, dayOfWeek: string, exerciseIds: number[]): Promise<void> {
+  await conn.run("DELETE FROM gym_plan_exercises WHERE day_of_week = $day", { day: dayOfWeek });
+  for (let i = 0; i < exerciseIds.length; i++) {
+    await conn.run(
+      `INSERT INTO gym_plan_exercises (day_of_week, exercise_id, position) VALUES ($day, $exercise_id, $position)`,
+      { day: dayOfWeek, exercise_id: exerciseIds[i], position: i },
+    );
+  }
+}
