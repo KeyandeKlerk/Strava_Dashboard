@@ -10,7 +10,9 @@ import {
   addGymSet,
   deleteGymSet,
   getGymSessionDetail,
+  getWeeklyPlan,
   listGymExercises,
+  setPlanForDay,
   upsertGymSession,
   type GymExerciseRow,
   type GymSessionDetail,
@@ -112,4 +114,14 @@ export async function createGymSessionForActivityAction(
   });
   updateTag(DASHBOARD_DATA_TAG);
   return { sessionId: session.id };
+}
+
+export async function getWeeklyPlanAction(): Promise<Record<string, GymExerciseRow[]>> {
+  const conn = await getConnection();
+  return getWeeklyPlan(conn);
+}
+
+export async function setPlanForDayAction(dayOfWeek: string, exerciseIds: number[]): Promise<void> {
+  const conn = await getConnection();
+  await setPlanForDay(conn, dayOfWeek, exerciseIds);
 }
