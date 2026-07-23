@@ -12,9 +12,14 @@ export default function GymPage() {
       <div className="mt-6">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium">Recent sessions</h2>
-          <a href="/gym/insights" className="text-xs text-neutral-500 underline">
-            Insights
-          </a>
+          <div className="flex items-center gap-3">
+            <a href="/gym/plan" className="text-xs text-neutral-500 underline">
+              Plan
+            </a>
+            <a href="/gym/insights" className="text-xs text-neutral-500 underline">
+              Insights
+            </a>
+          </div>
         </div>
         <GymHistoryList />
       </div>
