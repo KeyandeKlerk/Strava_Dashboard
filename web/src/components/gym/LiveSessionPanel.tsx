@@ -3,7 +3,6 @@ import { useMemo, useRef } from "react";
 import { useGymOffline } from "@/lib/gymOffline/context";
 import { SessionExerciseQueue } from "./SessionExerciseQueue";
 import { ActiveSessionSets } from "./ActiveSessionSets";
-import { WeightUnitToggle } from "./WeightUnitToggle";
 import { RestTimer, type RestTimerHandle } from "./RestTimer";
 
 function todayIso(): string {
@@ -19,7 +18,7 @@ function weekdayNameFor(sessionDate: string): string {
 }
 
 export function LiveSessionPanel() {
-  const { sessions, sets, pendingCount, isOnline, startSession, endSession } = useGymOffline();
+  const { sessions, sets, startSession, endSession } = useGymOffline();
   // One rest timer per active session, owned here (not inside the queue) so
   // it survives exercise swaps/next-exercise navigation within a session.
   const restTimerRef = useRef<RestTimerHandle>(null);
@@ -42,11 +41,6 @@ export function LiveSessionPanel() {
     <div>
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium">Gym</h2>
-        <div className="flex items-center gap-2">
-          {!isOnline && <span className="text-xs text-amber-600">Offline</span>}
-          {pendingCount > 0 && <span className="text-xs text-neutral-500">{pendingCount} pending sync</span>}
-          <WeightUnitToggle />
-        </div>
       </div>
 
       {!activeSession ? (

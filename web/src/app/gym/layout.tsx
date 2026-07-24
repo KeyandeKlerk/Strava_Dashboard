@@ -1,5 +1,6 @@
 import { BottomNav } from "@/components/BottomNav";
 import { GymOfflineProvider } from "@/lib/gymOffline/context";
+import { GymStatusHeader } from "@/components/gym/GymStatusHeader";
 
 // Deliberately NOT under (dashboard) and NOT force-dynamic: that layout does
 // a DB call on every request, which combined with BottomNav's plain-<a>
@@ -13,7 +14,10 @@ export default function GymLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col">
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-24 pt-4">
-        <GymOfflineProvider>{children}</GymOfflineProvider>
+        <GymOfflineProvider>
+          <GymStatusHeader />
+          {children}
+        </GymOfflineProvider>
       </main>
       <BottomNav />
     </div>
