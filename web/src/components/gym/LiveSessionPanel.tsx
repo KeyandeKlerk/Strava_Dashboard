@@ -1,9 +1,10 @@
 "use client";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useGymOffline } from "@/lib/gymOffline/context";
 import { SessionExerciseQueue } from "./SessionExerciseQueue";
 import { ActiveSessionSets } from "./ActiveSessionSets";
 import { WeightUnitToggle } from "./WeightUnitToggle";
+import { RestTimer, type RestTimerHandle } from "./RestTimer";
 
 function todayIso(): string {
   const now = new Date();
@@ -19,6 +20,9 @@ function weekdayNameFor(sessionDate: string): string {
 
 export function LiveSessionPanel() {
   const { sessions, sets, pendingCount, isOnline, startSession, endSession } = useGymOffline();
+  // One rest timer per active session, owned here (not inside the queue) so
+  // it survives exercise swaps/next-exercise navigation within a session.
+  const restTimerRef = useRef<RestTimerHandle>(null);
 
   // The most recently started session that hasn't been ended yet — durable
   // across reloads/app kills since sessionsCache lives in IndexedDB, not
@@ -57,6 +61,8 @@ export function LiveSessionPanel() {
         <div className="mt-3">
           <p className="text-xs text-neutral-500">Session started {activeSession.sessionDate}</p>
 
+          <RestTimer ref={restTimerRef} />
+
           <ActiveSessionSets sets={activeSessionSets} />
 
           <div className="mt-3">
@@ -64,6 +70,7 @@ export function LiveSessionPanel() {
               sessionClientUuid={activeSession.clientUuid}
               activeSessionSets={activeSessionSets}
               planDayName={weekdayNameFor(activeSession.sessionDate)}
+              onLogged={() => restTimerRef.current?.start()}
             />
           </div>
 

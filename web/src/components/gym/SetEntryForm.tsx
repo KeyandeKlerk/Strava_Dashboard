@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useGymOffline } from "@/lib/gymOffline/context";
 import { useWeightUnit } from "@/lib/gymOffline/useWeightUnit";
+import { unlockRestTimerAudio } from "@/lib/gymRestTimerAudio";
 import type { CachedExercise } from "@/lib/gymOffline/db";
 
 const FIELD_CLASS =
@@ -15,6 +16,7 @@ export function SetEntryForm({
   onSwap,
   showNext,
   onNext,
+  onLogged,
 }: {
   sessionClientUuid: string;
   exercise: CachedExercise;
@@ -25,6 +27,9 @@ export function SetEntryForm({
   onSwap: () => void;
   showNext: boolean;
   onNext: () => void;
+  // Called once a set has actually been logged (after logSet resolves) —
+  // LiveSessionPanel uses this to start its rest timer.
+  onLogged?: () => void;
 }) {
   const { logSet, lastPerformanceByExercise } = useGymOffline();
   const { unit, toKg, toDisplay } = useWeightUnit();
@@ -37,6 +42,13 @@ export function SetEntryForm({
   const hasTargetPair = target != null && target.sets != null && target.reps != null;
 
   async function handleSubmit(formData: FormData) {
+    // Must be the first synchronous statement in this handler (before any
+    // `await`, and before the validation below can early-return) so the
+    // AudioContext is created/resumed within the same user-gesture call
+    // stack as the "Log set" tap — required for iOS Safari to allow the
+    // rest timer's completion beep to play later without a fresh gesture.
+    unlockRestTimerAudio();
+
     const weightValue = Number(formData.get("weight"));
     const repsValue = Number(formData.get("reps"));
     if (!Number.isFinite(weightValue) || weightValue <= 0) return;
@@ -71,6 +83,7 @@ export function SetEntryForm({
       // state forward to the next set.
       setIsWarmup(false);
       setRpe("");
+      onLogged?.();
     } finally {
       setIsSaving(false);
     }

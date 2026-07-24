@@ -23,10 +23,13 @@ export function SessionExerciseQueue({
   sessionClientUuid,
   activeSessionSets,
   planDayName,
+  onLogged,
 }: {
   sessionClientUuid: string;
   activeSessionSets: CachedSet[];
   planDayName: string;
+  // Bubbled straight through to SetEntryForm — see its doc comment.
+  onLogged?: () => void;
 }) {
   const { exercises, planByDay } = useGymOffline();
   const [queueEntries, setQueueEntries] = useState<QueueEntry[]>([]);
@@ -209,6 +212,7 @@ export function SessionExerciseQueue({
           onSwap={() => setPickerMode("swap")}
           showNext={hasLoggedCurrent}
           onNext={handleNext}
+          onLogged={onLogged}
         />
       </div>
     </div>
