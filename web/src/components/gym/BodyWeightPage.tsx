@@ -4,10 +4,8 @@ import { deleteBodyWeightLogAction, listBodyWeightLogsAction, logBodyWeightActio
 import { useWeightUnit } from "@/lib/gymOffline/useWeightUnit";
 import { ChartCard } from "@/components/charts/ChartCard";
 import { BodyWeightChart } from "@/components/charts/GymCharts";
+import { FIELD_CLASS } from "@/lib/uiStyles";
 import type { BodyWeightLogRow } from "@/lib/db/bodyWeightMutations";
-
-const FIELD_CLASS =
-  "w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900";
 
 export function BodyWeightPage({
   initialLogs,

@@ -2,13 +2,11 @@
 import { useState, useTransition } from "react";
 import { addDailySessionAction, deleteDailySessionAction, moveDailySessionAction } from "@/lib/planActions";
 import { INTENSITY_LABEL, SESSION_ICON, type WeekDate } from "@/lib/shared";
+import { FIELD_CLASS } from "@/lib/uiStyles";
 import type { DailyPlanRow } from "@/lib/metrics";
 
 const SESSION_TYPES = ["rest", "sc", "easy_run", "quality_run", "long_run", "hills", "cross_training", "cricket", "race"];
 const INTENSITIES = ["easy", "moderate", "hard", "race", "rest"];
-
-const FIELD_CLASS =
-  "w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900";
 
 type Props =
   | { mode: "edit"; session: DailyPlanRow; daily: DailyPlanRow[]; weekDates: WeekDate[]; onClose: () => void }

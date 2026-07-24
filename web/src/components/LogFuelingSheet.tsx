@@ -1,10 +1,8 @@
 "use client";
 import { useState, useTransition } from "react";
 import { logNutritionEntryAction } from "@/app/(dashboard)/today/actions";
+import { FIELD_CLASS } from "@/lib/uiStyles";
 import type { RunningActivityOption } from "@/lib/metrics";
-
-const FIELD_CLASS =
-  "w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900";
 
 export function LogFuelingSheet({
   activities,

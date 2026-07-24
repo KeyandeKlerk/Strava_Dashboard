@@ -4,10 +4,8 @@ import { useGymOffline } from "@/lib/gymOffline/context";
 import { useWeightUnit } from "@/lib/gymOffline/useWeightUnit";
 import { unlockRestTimerAudio } from "@/lib/gymRestTimerAudio";
 import { calculatePlates, DEFAULT_BAR_KG, DEFAULT_BAR_LB } from "@/lib/plateCalculator";
+import { FIELD_CLASS } from "@/lib/uiStyles";
 import type { CachedExercise } from "@/lib/gymOffline/db";
-
-const FIELD_CLASS =
-  "w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900";
 
 export function SetEntryForm({
   sessionClientUuid,

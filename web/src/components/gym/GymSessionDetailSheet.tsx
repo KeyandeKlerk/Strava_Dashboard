@@ -11,10 +11,8 @@ import {
 } from "@/lib/gymActions";
 import { useWeightUnit } from "@/lib/gymOffline/useWeightUnit";
 import { MUSCLE_GROUPS } from "@/lib/db/gymExerciseSeed";
+import { FIELD_CLASS } from "@/lib/uiStyles";
 import type { GymExerciseRow, GymSessionDetail } from "@/lib/db/gymMutations";
-
-const FIELD_CLASS =
-  "w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900";
 
 // Viewing/editing a session's history — reached from WorkoutDetailSheet (an
 // activity-linked session) or the /gym history list (a standalone one).

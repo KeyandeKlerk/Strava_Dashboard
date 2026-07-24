@@ -2,10 +2,8 @@
 import { useMemo, useState } from "react";
 import { useGymOffline } from "@/lib/gymOffline/context";
 import { MUSCLE_GROUPS } from "@/lib/db/gymExerciseSeed";
+import { FIELD_CLASS } from "@/lib/uiStyles";
 import type { CachedExercise } from "@/lib/gymOffline/db";
-
-const FIELD_CLASS =
-  "w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900";
 
 export function ExercisePicker({ onSelect }: { onSelect: (exercise: CachedExercise) => void }) {
   const { exercises, addCustomExercise } = useGymOffline();

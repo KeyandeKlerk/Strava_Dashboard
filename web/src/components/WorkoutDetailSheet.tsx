@@ -6,6 +6,7 @@ import { fmtPace } from "@/lib/shared";
 import type { ActivityDetailRow } from "@/lib/metrics";
 import { StatCard } from "@/components/StatCard";
 import { GymSessionDetailSheet } from "@/components/gym/GymSessionDetailSheet";
+import { FIELD_CLASS } from "@/lib/uiStyles";
 
 const ZONE_LABELS: Array<[keyof ActivityDetailRow, string]> = [
   ["z1_min", "Z1"],
@@ -25,9 +26,6 @@ const BODY_PARTS: Array<[string, string]> = [
   ["hamstring", "Hamstring"],
   ["other", "Other"],
 ];
-
-const FIELD_CLASS =
-  "w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900";
 
 export function WorkoutDetailSheet({ activityId, onClose }: { activityId: number; onClose: () => void }) {
   const [detail, setDetail] = useState<WorkoutDetail | null | undefined>(undefined);

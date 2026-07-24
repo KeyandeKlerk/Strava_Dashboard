@@ -8,12 +8,10 @@ import {
   isContiguousSelection,
   normalizeGroups,
 } from "@/lib/gymSupersets";
+import { FIELD_CLASS } from "@/lib/uiStyles";
 import type { GymExerciseRow, PlanExerciseRow } from "@/lib/db/gymMutations";
 
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
-
-const FIELD_CLASS =
-  "w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900";
 
 // Deliberately separate from ExercisePicker (web/src/components/gym/ExercisePicker.tsx):
 // that component is coupled to the offline GymOfflineProvider/CachedExercise cache, while

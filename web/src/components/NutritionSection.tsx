@@ -5,9 +5,7 @@ import { StatCard } from "@/components/StatCard";
 import { ChartCard } from "@/components/charts/ChartCard";
 import { CarbsPerHourChart, SodiumPerHourChart } from "@/components/charts/NutritionCharts";
 import { LogFuelingButton } from "@/components/LogFuelingButton";
-
-const FIELD_CLASS =
-  "w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900";
+import { FIELD_CLASS } from "@/lib/uiStyles";
 
 export function NutritionSection({
   targets,
