@@ -180,6 +180,7 @@ export const SCHEMA_STATEMENTS: readonly string[] = [
     created_at TIMESTAMP DEFAULT current_timestamp
   )`,
   `ALTER TABLE gym_sets ADD COLUMN IF NOT EXISTS is_warmup BOOLEAN DEFAULT FALSE`,
+  `ALTER TABLE gym_sets ALTER COLUMN is_warmup SET NOT NULL`,
   `ALTER TABLE gym_sets ADD COLUMN IF NOT EXISTS rpe DOUBLE`,
   `ALTER TABLE gym_plan_exercises ADD COLUMN IF NOT EXISTS target_sets INTEGER`,
   `ALTER TABLE gym_plan_exercises ADD COLUMN IF NOT EXISTS target_reps INTEGER`,

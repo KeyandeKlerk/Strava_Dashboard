@@ -36,6 +36,7 @@ async function main() {
 
   console.log("Adding columns to gym_sets");
   await conn.run("ALTER TABLE gym_sets ADD COLUMN IF NOT EXISTS is_warmup BOOLEAN DEFAULT FALSE");
+  await conn.run("ALTER TABLE gym_sets ALTER COLUMN is_warmup SET NOT NULL");
   await conn.run("ALTER TABLE gym_sets ADD COLUMN IF NOT EXISTS rpe DOUBLE");
 
   console.log("Adding columns to gym_plan_exercises");
