@@ -21,6 +21,12 @@ import {
   type PlanEntryInput,
   type PlanExerciseRow,
 } from "./db/gymMutations";
+import {
+  deleteBodyWeightLog,
+  listBodyWeightLogs,
+  logBodyWeight,
+  type BodyWeightLogRow,
+} from "./db/bodyWeightMutations";
 import { exerciseProgression, type ExerciseProgressionRow } from "./gymMetrics";
 import { DASHBOARD_DATA_TAG } from "./pageData";
 
@@ -140,4 +146,37 @@ export async function getWeeklyPlanAction(): Promise<Record<string, PlanExercise
 export async function setPlanForDayAction(dayOfWeek: string, entries: PlanEntryInput[]): Promise<void> {
   const conn = await getConnection();
   await setPlanForDay(conn, dayOfWeek, entries);
+}
+
+// Weight arrives already converted to kg — BodyWeightPage's form converts via
+// useWeightUnit().toKg() before submit, so storage stays kg-only regardless
+// of the user's display preference (same "convert at the UI boundary" split
+// as every other weight field in the gym tracker).
+export async function logBodyWeightAction(formData: FormData): Promise<GymActionState> {
+  const loggedDate = String(formData.get("logged_date") ?? "");
+  const weightKg = Number(formData.get("weight_kg"));
+
+  if (!loggedDate) return { error: "Pick a date." };
+  if (!Number.isFinite(weightKg) || weightKg <= 0) return { error: "Enter a valid weight." };
+
+  const conn = await getConnection();
+  await logBodyWeight(conn, {
+    client_uuid: crypto.randomUUID(),
+    logged_date: loggedDate,
+    weight_kg: weightKg,
+  });
+
+  updateTag(DASHBOARD_DATA_TAG);
+  return {};
+}
+
+export async function listBodyWeightLogsAction(): Promise<BodyWeightLogRow[]> {
+  const conn = await getConnection();
+  return listBodyWeightLogs(conn);
+}
+
+export async function deleteBodyWeightLogAction(clientUuid: string): Promise<void> {
+  const conn = await getConnection();
+  await deleteBodyWeightLog(conn, clientUuid);
+  updateTag(DASHBOARD_DATA_TAG);
 }

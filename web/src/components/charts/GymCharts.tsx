@@ -64,6 +64,24 @@ export function SessionsPerWeekChart({ data }: { data: Array<{ week_start: strin
   );
 }
 
+export function BodyWeightChart({ data }: { data: Array<{ logged_date: string; weight_kg: number }> }) {
+  return (
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT.primary}>
+      <ComposedChart data={data} margin={CHART_MARGIN}>
+        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+        <XAxis dataKey="logged_date" tickFormatter={shortDate} tick={{ fontSize: 10 }} minTickGap={30} />
+        <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10 }} domain={["auto", "auto"]} />
+        <Tooltip
+          {...TOOLTIP_STYLE}
+          labelFormatter={dateTooltipLabel}
+          formatter={(v) => [`${Number(v).toFixed(1)} kg`, "Weight"]}
+        />
+        <Line dataKey="weight_kg" name="Weight" stroke={SERIES.blue} dot strokeWidth={2} />
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
 export function ExerciseProgressionChart({
   data,
 }: {

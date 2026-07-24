@@ -9,6 +9,7 @@ import { unstable_cache } from "next/cache";
 import { getConnection, queryRow } from "./db/client";
 import { getAllRaceEvents, getPrimaryGoalRace } from "./db/mutations";
 import { listGymExercises } from "./db/gymMutations";
+import { listBodyWeightLogs } from "./db/bodyWeightMutations";
 import {
   exerciseProgression,
   gymSessionsPerWeek,
@@ -477,5 +478,20 @@ export const getGymInsightsPageData = unstable_cache(
     };
   },
   ["gym-insights-page-data"],
+  { tags: [DASHBOARD_DATA_TAG] },
+);
+
+export const getBodyWeightPageData = unstable_cache(
+  async () => {
+    const conn = await getConnection();
+    const logs = await listBodyWeightLogs(conn);
+    // Chart wants oldest-first (matches every other time-series chart's sort
+    // order); the recent-entries list below it wants listBodyWeightLogs' own
+    // most-recent-first order, so both are returned rather than sorting once
+    // and making one of the two callers re-sort.
+    const chartData = [...logs].sort((a, b) => (a.logged_date < b.logged_date ? -1 : 1));
+    return { logs, chartData };
+  },
+  ["body-weight-page-data"],
   { tags: [DASHBOARD_DATA_TAG] },
 );

@@ -19,6 +19,9 @@ export default function GymPage() {
             <a href="/gym/insights" className="text-xs text-neutral-500 underline">
               Insights
             </a>
+            <a href="/gym/bodyweight" className="text-xs text-neutral-500 underline">
+              Weight
+            </a>
           </div>
         </div>
         <GymHistoryList />
