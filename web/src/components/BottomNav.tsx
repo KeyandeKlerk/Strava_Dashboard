@@ -31,7 +31,7 @@ export function BottomNav() {
                 href={item.href}
                 className={`flex flex-col items-center justify-center gap-0.5 rounded-xl py-2 text-xs font-medium transition-colors ${
                   active
-                    ? "bg-violet-600 text-white dark:bg-violet-500 dark:text-white"
+                    ? "bg-violet-600 text-white" // violet-600 has adequate contrast (5.7:1) in both light and dark modes per WCAG AA
                     : "text-neutral-500 active:bg-neutral-100 dark:text-neutral-400 dark:active:bg-neutral-900"
                 }`}
                 aria-current={active ? "page" : undefined}
