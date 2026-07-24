@@ -160,6 +160,19 @@ export async function deleteGymSet(conn: DuckDBConnection, clientUuid: string): 
   await conn.run("DELETE FROM gym_sets WHERE client_uuid = $client_uuid", { client_uuid: clientUuid });
 }
 
+// Deleting an already-deleted or never-landed row is a no-op — naturally
+// idempotent, no special-casing needed. No FK/cascade exists at the DB level
+// (session_id/exercise_id are plain, unconstrained integers), so the sets
+// delete must happen first, as its own statement, before the session row
+// disappears.
+export async function deleteGymSession(conn: DuckDBConnection, clientUuid: string): Promise<void> {
+  await conn.run(
+    `DELETE FROM gym_sets WHERE session_id = (SELECT id FROM gym_sessions WHERE client_uuid = $client_uuid)`,
+    { client_uuid: clientUuid },
+  );
+  await conn.run(`DELETE FROM gym_sessions WHERE client_uuid = $client_uuid`, { client_uuid: clientUuid });
+}
+
 export interface GymSetDetailRow {
   id: number;
   client_uuid: string;

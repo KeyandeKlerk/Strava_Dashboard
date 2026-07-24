@@ -4,8 +4,15 @@ import { useGymOffline } from "@/lib/gymOffline/context";
 import { GymSessionDetailSheet } from "./GymSessionDetailSheet";
 
 export function GymHistoryList() {
-  const { recentSessions } = useGymOffline();
+  const { recentSessions, dismissDeletedSession } = useGymOffline();
   const [openSessionId, setOpenSessionId] = useState<number | null>(null);
+
+  function handleCloseDetail(deletedSessionId?: number) {
+    setOpenSessionId(null);
+    if (deletedSessionId != null) {
+      dismissDeletedSession(deletedSessionId);
+    }
+  }
 
   if (recentSessions.length === 0) {
     return <p className="mt-2 text-sm text-neutral-500">No gym sessions logged yet.</p>;
@@ -30,9 +37,7 @@ export function GymHistoryList() {
         ))}
       </ul>
 
-      {openSessionId != null && (
-        <GymSessionDetailSheet sessionId={openSessionId} onClose={() => setOpenSessionId(null)} />
-      )}
+      {openSessionId != null && <GymSessionDetailSheet sessionId={openSessionId} onClose={handleCloseDetail} />}
     </>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   addCustomExerciseAction,
+  deleteGymSessionAction,
   deleteGymSetAction,
   getGymSessionDetailAction,
   listGymExercisesAction,
@@ -18,13 +19,27 @@ const FIELD_CLASS =
 // activity-linked session) or the /gym history list (a standalone one).
 // Not offline-capable on purpose: this is a backfill/edit flow, not the
 // live-at-the-gym logging path (see web/src/lib/gymOffline/ for that one).
-export function GymSessionDetailSheet({ sessionId, onClose }: { sessionId: number; onClose: () => void }) {
+export function GymSessionDetailSheet({
+  sessionId,
+  onClose,
+}: {
+  sessionId: number;
+  onClose: (deletedSessionId?: number) => void;
+}) {
   const [detail, setDetail] = useState<GymSessionDetail | null | undefined>(undefined);
   const [exercises, setExercises] = useState<GymExerciseRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showCustomForm, setShowCustomForm] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isPending, startTransition] = useTransition();
   const { unit, toDisplay, toKg } = useWeightUnit();
+  const confirmTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (confirmTimeout.current) clearTimeout(confirmTimeout.current);
+    };
+  }, []);
 
   function reload() {
     getGymSessionDetailAction(sessionId).then(setDetail);
@@ -63,6 +78,21 @@ export function GymSessionDetailSheet({ sessionId, onClose }: { sessionId: numbe
     });
   }
 
+  function handleDeleteSession() {
+    if (!detail) return;
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      confirmTimeout.current = setTimeout(() => setConfirmingDelete(false), 4000);
+      return;
+    }
+    if (confirmTimeout.current) clearTimeout(confirmTimeout.current);
+    const deletedId = detail.id;
+    startTransition(async () => {
+      await deleteGymSessionAction(detail.client_uuid);
+      onClose(deletedId);
+    });
+  }
+
   function handleAddCustomExercise(formData: FormData) {
     setError(null);
     startTransition(async () => {
@@ -80,7 +110,7 @@ export function GymSessionDetailSheet({ sessionId, onClose }: { sessionId: numbe
   const totalVolumeKg = detail?.sets.reduce((sum, s) => sum + s.weight_kg * s.reps, 0) ?? 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => onClose()}>
       <div
         className="w-full max-w-3xl rounded-t-xl bg-white p-4 dark:bg-neutral-950"
         onClick={(e) => e.stopPropagation()}
@@ -187,9 +217,20 @@ export function GymSessionDetailSheet({ sessionId, onClose }: { sessionId: numbe
           </>
         )}
 
-        <button type="button" onClick={onClose} className="mt-3 w-full text-center text-xs text-neutral-500">
+        <button type="button" onClick={() => onClose()} className="mt-3 w-full text-center text-xs text-neutral-500">
           Close
         </button>
+
+        {detail && (
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={handleDeleteSession}
+            className="mt-2 w-full rounded-md border border-red-300 px-3 py-2 text-center text-xs text-red-600 dark:border-red-900"
+          >
+            {confirmingDelete ? "Tap again to confirm" : "Delete session"}
+          </button>
+        )}
       </div>
     </div>
   );

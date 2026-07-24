@@ -8,6 +8,7 @@ import { getConnection, queryRow } from "./db/client";
 import {
   addCustomExercise,
   addGymSet,
+  deleteGymSession,
   deleteGymSet,
   getGymSessionDetail,
   getWeeklyPlan,
@@ -72,6 +73,12 @@ export async function logGymSetAction(sessionId: number, formData: FormData): Pr
 export async function deleteGymSetAction(clientUuid: string): Promise<void> {
   const conn = await getConnection();
   await deleteGymSet(conn, clientUuid);
+  updateTag(DASHBOARD_DATA_TAG);
+}
+
+export async function deleteGymSessionAction(clientUuid: string): Promise<void> {
+  const conn = await getConnection();
+  await deleteGymSession(conn, clientUuid);
   updateTag(DASHBOARD_DATA_TAG);
 }
 

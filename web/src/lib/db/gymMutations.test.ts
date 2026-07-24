@@ -7,6 +7,7 @@ import {
   addCustomExercise,
   addGymSet,
   correlateGymSessionsToActivities,
+  deleteGymSession,
   deleteGymSet,
   getGymSessionByActivityId,
   getGymSessionDetail,
@@ -210,6 +211,42 @@ describe("deleteGymSet", () => {
 
   it("is a no-op for an already-deleted or never-landed client_uuid", async () => {
     await expect(deleteGymSet(conn, "never-existed")).resolves.not.toThrow();
+  });
+});
+
+describe("deleteGymSession", () => {
+  it("removes the session from listRecentGymSessions", async () => {
+    const session = await upsertGymSession(conn, { client_uuid: "sess-13", session_date: "2026-07-20" });
+
+    await deleteGymSession(conn, "sess-13");
+
+    const rows = await listRecentGymSessions(conn);
+    expect(rows.some((r) => r.id === session.id)).toBe(false);
+  });
+
+  it("removes the session's sets along with it", async () => {
+    const session = await upsertGymSession(conn, { client_uuid: "sess-14", session_date: "2026-07-20" });
+    const exercises = await listGymExercises(conn);
+    await addGymSet(conn, {
+      client_uuid: "set-6",
+      session_client_uuid: "sess-14",
+      exercise_id: exercises[0].id,
+      set_number: 1,
+      weight_kg: 40,
+      reps: 12,
+    });
+
+    await deleteGymSession(conn, "sess-14");
+
+    const detail = await getGymSessionDetail(conn, session.id);
+    expect(detail).toBeNull();
+
+    const setRow = await queryRow(conn, "SELECT id FROM gym_sets WHERE client_uuid = 'set-6'");
+    expect(setRow).toBeUndefined();
+  });
+
+  it("is a no-op for an already-deleted or never-landed client_uuid", async () => {
+    await expect(deleteGymSession(conn, "never-existed-session")).resolves.not.toThrow();
   });
 });
 

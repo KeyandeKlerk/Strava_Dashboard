@@ -22,6 +22,7 @@ import {
   putExerciseCache,
   putSessionCache,
   putSetCache,
+  removeRecentSessionCache,
   replaceExercisesCache,
   replacePlanCache,
   replaceRecentSessionsCache,
@@ -63,6 +64,7 @@ interface GymOfflineContextValue {
   endSession(sessionClientUuid: string): Promise<void>;
   logSet(input: LogSetInput): Promise<CachedSet>;
   deleteSet(clientUuid: string): Promise<void>;
+  dismissDeletedSession(id: number): Promise<void>;
   addCustomExercise(input: AddCustomExerciseInput): Promise<CachedExercise>;
   getSetsForSession(sessionClientUuid: string): Promise<CachedSet[]>;
   refresh(): Promise<void>;
@@ -281,6 +283,19 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
     [refresh, flush],
   );
 
+  // Corrects the local recentSessionsCache after a session was deleted via
+  // the online-only deleteGymSessionAction (see GymSessionDetailSheet) —
+  // that action doesn't touch this cache, so a targeted removal + refresh
+  // stands in for a full re-bootstrap.
+  const dismissDeletedSession = useCallback(
+    async (id: number): Promise<void> => {
+      const db = await getGymOfflineDb();
+      await removeRecentSessionCache(db, id);
+      await refresh();
+    },
+    [refresh],
+  );
+
   const addCustomExercise = useCallback(
     async (input: AddCustomExerciseInput): Promise<CachedExercise> => {
       const db = await getGymOfflineDb();
@@ -333,6 +348,7 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
         endSession,
         logSet,
         deleteSet,
+        dismissDeletedSession,
         addCustomExercise,
         getSetsForSession,
         refresh,

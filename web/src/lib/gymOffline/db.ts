@@ -224,6 +224,12 @@ export async function listRecentSessionsCache(db: GymOfflineDb): Promise<CachedR
   return db.getAll("recentSessionsCache");
 }
 
+// Targeted correction after an online-only deleteGymSessionAction — avoids
+// forcing a full bootstrap just to drop one row from the cache.
+export async function removeRecentSessionCache(db: GymOfflineDb, id: number): Promise<void> {
+  await db.delete("recentSessionsCache", id);
+}
+
 export async function replacePlanCache(db: GymOfflineDb, days: CachedPlanDay[]): Promise<void> {
   const tx = db.transaction("planCache", "readwrite");
   await tx.store.clear();
