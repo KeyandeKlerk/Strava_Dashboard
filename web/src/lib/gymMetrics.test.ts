@@ -80,6 +80,28 @@ describe("exerciseProgression / personalRecords", () => {
     expect(record.best_est_1rm).toBeCloseTo(126.67, 1);
     expect(record.best_est_1rm_date).toBe("2026-07-08");
   });
+
+  it("excludes warm-up sets from progression and personal records", async () => {
+    // A warm-up set heavier/better than anything above would otherwise win
+    // both max_weight_kg and best_est_1rm — it must be ignored entirely.
+    const session3 = await upsertGymSession(conn, { client_uuid: "sess-3-warmup", session_date: "2026-07-15" });
+    await addGymSet(conn, {
+      client_uuid: "set-3-warmup",
+      session_client_uuid: session3.client_uuid,
+      exercise_id: exerciseId,
+      set_number: 1,
+      weight_kg: 200,
+      reps: 10,
+      is_warmup: true,
+    });
+
+    const progressionRows = await exerciseProgression(conn, exerciseId);
+    expect(progressionRows.some((r) => r.session_date === "2026-07-15")).toBe(false);
+
+    const [record] = await personalRecords(conn);
+    expect(record.max_weight_kg).toBe(120);
+    expect(record.best_est_1rm).toBeCloseTo(126.67, 1);
+  });
 });
 
 describe("volume aggregations", () => {
@@ -123,6 +145,31 @@ describe("volume aggregations", () => {
     expect(byGroup["Chest"]).toBe(500);
     expect(byGroup["Quads"]).toBe(600);
   });
+
+  it("excludes warm-up sets from session, weekly, and muscle-group volume", async () => {
+    const chest = await addCustomExercise(conn, { client_uuid: "ex-chest-2", name: "Vol Chest 2", muscle_group: "Chest" });
+    const session = await upsertGymSession(conn, { client_uuid: "sess-vol-2", session_date: "2026-07-06" });
+    await addGymSet(conn, {
+      client_uuid: "set-vol-warmup",
+      session_client_uuid: session.client_uuid,
+      exercise_id: chest.id,
+      set_number: 1,
+      weight_kg: 40,
+      reps: 20,
+      is_warmup: true,
+    });
+
+    const sessionRows = await sessionVolume(conn);
+    const thisSession = sessionRows.find((r) => r.session_id === session.id);
+    expect(thisSession?.total_volume_kg).toBe(0);
+
+    const weeklyRows = await weeklyGymVolume(conn);
+    expect(weeklyRows[0].total_volume_kg).toBe(100 * 5 + 150 * 4);
+
+    const groupRows = await muscleGroupWeeklyVolume(conn);
+    const byGroup = Object.fromEntries(groupRows.map((r) => [r.muscle_group, r.total_volume_kg]));
+    expect(byGroup["Chest"]).toBe(500);
+  });
 });
 
 describe("consistency metrics", () => {
@@ -155,5 +202,30 @@ describe("consistency metrics", () => {
     const rows = await muscleGroupFrequency(conn);
     const row = rows.find((r) => r.muscle_group === "Back Test");
     expect(row?.last_trained_date).toBe("2026-07-20");
+  });
+
+  it("still counts a session/muscle-group trained with only warm-up sets", async () => {
+    const exercise = await addCustomExercise(conn, {
+      client_uuid: "ex-freq-warmup",
+      name: "Freq Warmup Exercise",
+      muscle_group: "Warmup Test",
+    });
+    const session = await upsertGymSession(conn, { client_uuid: "sess-freq-warmup", session_date: "2026-07-21" });
+    await addGymSet(conn, {
+      client_uuid: "set-freq-warmup",
+      session_client_uuid: session.client_uuid,
+      exercise_id: exercise.id,
+      set_number: 1,
+      weight_kg: 20,
+      reps: 15,
+      is_warmup: true,
+    });
+
+    const freqRows = await muscleGroupFrequency(conn);
+    const row = freqRows.find((r) => r.muscle_group === "Warmup Test");
+    expect(row?.last_trained_date).toBe("2026-07-21");
+
+    const sessionRows = await gymSessionsPerWeek(conn);
+    expect(sessionRows.find((r) => r.week_start.startsWith("2026-07-20"))?.session_count).toBeGreaterThanOrEqual(1);
   });
 });

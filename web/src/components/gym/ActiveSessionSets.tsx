@@ -28,10 +28,18 @@ export function ActiveSessionSets({ sets }: { sets: CachedSet[] }) {
             {exerciseSets
               .sort((a, b) => a.setNumber - b.setNumber)
               .map((set) => (
-                <div key={set.clientUuid} className="mt-1 flex items-center justify-between text-sm">
+                <div
+                  key={set.clientUuid}
+                  className={`mt-1 flex items-center justify-between text-sm ${set.isWarmup ? "italic text-neutral-400 dark:text-neutral-500" : ""}`}
+                >
                   <span>
                     Set {set.setNumber}: {toDisplay(set.weightKg).toFixed(1)}
                     {unit} x {set.reps}
+                    {set.isWarmup && (
+                      <span className="ml-2 rounded bg-neutral-200 px-1 py-0.5 text-[10px] font-medium not-italic text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+                        W
+                      </span>
+                    )}
                   </span>
                   <button type="button" onClick={() => deleteSet(set.clientUuid)} className="text-xs text-red-600">
                     Remove

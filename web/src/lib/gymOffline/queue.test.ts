@@ -152,6 +152,7 @@ describe("exercise placeholder resolution", () => {
       setNumber: 1,
       weightKg: 50,
       reps: 10,
+      isWarmup: false,
     });
 
     await enqueueMutation(db, {

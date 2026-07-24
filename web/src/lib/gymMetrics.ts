@@ -30,7 +30,7 @@ export async function exerciseProgression(conn: DuckDBConnection, exerciseId: nu
         MAX(st.weight_kg * (1 + st.reps / 30.0)) AS best_est_1rm
      FROM gym_sets st
      JOIN gym_sessions gs ON gs.id = st.session_id
-     WHERE st.exercise_id = $exercise_id
+     WHERE st.exercise_id = $exercise_id AND NOT st.is_warmup
      GROUP BY gs.session_date
      ORDER BY gs.session_date`,
     { exercise_id: exerciseId },
@@ -57,6 +57,7 @@ export async function personalRecords(conn: DuckDBConnection): Promise<PersonalR
             gs.session_date::VARCHAR AS session_date
         FROM gym_sets st
         JOIN gym_sessions gs ON gs.id = st.session_id
+        WHERE NOT st.is_warmup
      )
      SELECT
         ge.id AS exercise_id,
@@ -84,7 +85,7 @@ export async function sessionVolume(conn: DuckDBConnection): Promise<SessionVolu
     `SELECT gs.id AS session_id, gs.session_date::VARCHAR AS session_date,
             COALESCE(SUM(st.weight_kg * st.reps), 0) AS total_volume_kg
      FROM gym_sessions gs
-     LEFT JOIN gym_sets st ON st.session_id = gs.id
+     LEFT JOIN gym_sets st ON st.session_id = gs.id AND NOT st.is_warmup
      GROUP BY gs.id, gs.session_date
      ORDER BY gs.session_date`,
   );
@@ -101,7 +102,7 @@ export async function weeklyGymVolume(conn: DuckDBConnection): Promise<WeeklyGym
     `SELECT DATE_TRUNC('week', gs.session_date)::VARCHAR AS week_start,
             COALESCE(SUM(st.weight_kg * st.reps), 0) AS total_volume_kg
      FROM gym_sessions gs
-     LEFT JOIN gym_sets st ON st.session_id = gs.id
+     LEFT JOIN gym_sets st ON st.session_id = gs.id AND NOT st.is_warmup
      GROUP BY 1
      ORDER BY 1`,
   );
@@ -122,6 +123,7 @@ export async function muscleGroupWeeklyVolume(conn: DuckDBConnection): Promise<M
      FROM gym_sets st
      JOIN gym_sessions gs ON gs.id = st.session_id
      JOIN gym_exercises ge ON ge.id = st.exercise_id
+     WHERE NOT st.is_warmup
      GROUP BY 1, 2
      ORDER BY 1, 2`,
   );

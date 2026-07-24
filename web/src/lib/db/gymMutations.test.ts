@@ -188,6 +188,39 @@ describe("addGymSet", () => {
     });
     expect("error" in result).toBe(true);
   });
+
+  it("defaults is_warmup to false when not provided", async () => {
+    const session = await upsertGymSession(conn, { client_uuid: "sess-warmup-default", session_date: "2026-07-20" });
+    const exercises = await listGymExercises(conn);
+    await addGymSet(conn, {
+      client_uuid: "set-warmup-default",
+      session_client_uuid: "sess-warmup-default",
+      exercise_id: exercises[0].id,
+      set_number: 1,
+      weight_kg: 50,
+      reps: 10,
+    });
+
+    const detail = await getGymSessionDetail(conn, session.id);
+    expect(detail?.sets[0].is_warmup).toBe(false);
+  });
+
+  it("persists is_warmup: true and round-trips it through getGymSessionDetail", async () => {
+    const session = await upsertGymSession(conn, { client_uuid: "sess-warmup-true", session_date: "2026-07-20" });
+    const exercises = await listGymExercises(conn);
+    await addGymSet(conn, {
+      client_uuid: "set-warmup-true",
+      session_client_uuid: "sess-warmup-true",
+      exercise_id: exercises[0].id,
+      set_number: 1,
+      weight_kg: 20,
+      reps: 15,
+      is_warmup: true,
+    });
+
+    const detail = await getGymSessionDetail(conn, session.id);
+    expect(detail?.sets[0].is_warmup).toBe(true);
+  });
 });
 
 describe("deleteGymSet", () => {

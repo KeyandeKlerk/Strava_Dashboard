@@ -115,6 +115,7 @@ export interface AddGymSetInput {
   set_number: number;
   weight_kg: number;
   reps: number;
+  is_warmup?: boolean;
 }
 
 export interface AddGymSetError {
@@ -131,8 +132,8 @@ export async function addGymSet(
   input: AddGymSetInput,
 ): Promise<{ id: number; client_uuid: string } | AddGymSetError> {
   await conn.run(
-    `INSERT INTO gym_sets (client_uuid, session_id, exercise_id, set_number, weight_kg, reps)
-     SELECT $client_uuid, s.id, $exercise_id, $set_number, $weight_kg, $reps
+    `INSERT INTO gym_sets (client_uuid, session_id, exercise_id, set_number, weight_kg, reps, is_warmup)
+     SELECT $client_uuid, s.id, $exercise_id, $set_number, $weight_kg, $reps, $is_warmup
      FROM gym_sessions s WHERE s.client_uuid = $session_client_uuid
      ON CONFLICT (client_uuid) DO NOTHING`,
     {
@@ -142,6 +143,7 @@ export async function addGymSet(
       set_number: input.set_number,
       weight_kg: input.weight_kg,
       reps: input.reps,
+      is_warmup: input.is_warmup ?? false,
     },
   );
 
@@ -182,6 +184,7 @@ export interface GymSetDetailRow {
   set_number: number;
   weight_kg: number;
   reps: number;
+  is_warmup: boolean;
   logged_at: string;
 }
 
@@ -214,7 +217,7 @@ async function loadGymSessionDetail(
   const sets = await queryRows<GymSetDetailRow>(
     conn,
     `SELECT gs.id, gs.client_uuid, gs.exercise_id, ge.name AS exercise_name, ge.muscle_group,
-            gs.set_number, gs.weight_kg, gs.reps, gs.logged_at::VARCHAR AS logged_at
+            gs.set_number, gs.weight_kg, gs.reps, gs.is_warmup, gs.logged_at::VARCHAR AS logged_at
      FROM gym_sets gs
      JOIN gym_exercises ge ON ge.id = gs.exercise_id
      WHERE gs.session_id = $id

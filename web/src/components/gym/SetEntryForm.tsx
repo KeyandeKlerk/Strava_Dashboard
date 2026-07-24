@@ -26,6 +26,7 @@ export function SetEntryForm({
   const { unit, toKg } = useWeightUnit();
   const [weight, setWeight] = useState("");
   const [reps, setReps] = useState("");
+  const [isWarmup, setIsWarmup] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   async function handleSubmit(formData: FormData) {
@@ -42,9 +43,13 @@ export function SetEntryForm({
         setNumber: nextSetNumber,
         weightKg: toKg(weightValue),
         reps: repsValue,
+        isWarmup,
       });
       setWeight("");
       setReps("");
+      // Warm-ups are the exception, not the rule — don't carry the checked
+      // state forward to the next set.
+      setIsWarmup(false);
     } finally {
       setIsSaving(false);
     }
@@ -87,6 +92,15 @@ export function SetEntryForm({
           className={FIELD_CLASS}
         />
       </div>
+      <label className="mt-2 flex items-center gap-2 text-xs text-neutral-500">
+        <input
+          type="checkbox"
+          checked={isWarmup}
+          onChange={(e) => setIsWarmup(e.target.checked)}
+          className="h-4 w-4 rounded border-neutral-300 dark:border-neutral-700"
+        />
+        Warm-up set
+      </label>
       <div className="mt-2 flex gap-2">
         <button
           type="submit"
