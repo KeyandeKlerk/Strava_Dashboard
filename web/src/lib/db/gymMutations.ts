@@ -177,6 +177,17 @@ export async function deleteGymSession(conn: DuckDBConnection, clientUuid: strin
   await conn.run(`DELETE FROM gym_sessions WHERE client_uuid = $client_uuid`, { client_uuid: clientUuid });
 }
 
+export async function updateGymSessionNotes(
+  conn: DuckDBConnection,
+  clientUuid: string,
+  notes: string | null,
+): Promise<void> {
+  await conn.run("UPDATE gym_sessions SET notes = $notes WHERE client_uuid = $client_uuid", {
+    notes,
+    client_uuid: clientUuid,
+  });
+}
+
 export interface GymSetDetailRow {
   id: number;
   client_uuid: string;

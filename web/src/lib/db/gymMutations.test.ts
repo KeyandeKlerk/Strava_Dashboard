@@ -15,6 +15,7 @@ import {
   listGymExercises,
   listRecentGymSessions,
   setPlanForDay,
+  updateGymSessionNotes,
   upsertGymSession,
 } from "./gymMutations";
 
@@ -313,6 +314,34 @@ describe("deleteGymSession", () => {
 
   it("is a no-op for an already-deleted or never-landed client_uuid", async () => {
     await expect(deleteGymSession(conn, "never-existed-session")).resolves.not.toThrow();
+  });
+});
+
+describe("updateGymSessionNotes", () => {
+  it("updates a session's notes", async () => {
+    const session = await upsertGymSession(conn, { client_uuid: "sess-notes-1", session_date: "2026-07-20" });
+
+    await updateGymSessionNotes(conn, "sess-notes-1", "Great workout, felt strong");
+
+    const detail = await getGymSessionDetail(conn, session.id);
+    expect(detail?.notes).toBe("Great workout, felt strong");
+  });
+
+  it("clears notes when passed null", async () => {
+    const session = await upsertGymSession(conn, {
+      client_uuid: "sess-notes-2",
+      session_date: "2026-07-20",
+      notes: "Initial notes",
+    });
+
+    await updateGymSessionNotes(conn, "sess-notes-2", null);
+
+    const detail = await getGymSessionDetail(conn, session.id);
+    expect(detail?.notes).toBeNull();
+  });
+
+  it("is a no-op for an already-deleted or never-landed client_uuid", async () => {
+    await expect(updateGymSessionNotes(conn, "never-existed-session", "notes")).resolves.not.toThrow();
   });
 });
 

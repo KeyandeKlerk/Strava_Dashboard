@@ -7,6 +7,7 @@ import {
   getGymSessionDetailAction,
   listGymExercisesAction,
   logGymSetAction,
+  updateGymSessionNotesAction,
 } from "@/lib/gymActions";
 import { useWeightUnit } from "@/lib/gymOffline/useWeightUnit";
 import { MUSCLE_GROUPS } from "@/lib/db/gymExerciseSeed";
@@ -31,6 +32,7 @@ export function GymSessionDetailSheet({
   const [error, setError] = useState<string | null>(null);
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [notesValue, setNotesValue] = useState<string>("");
   const [isPending, startTransition] = useTransition();
   const { unit, toDisplay, toKg } = useWeightUnit();
   const confirmTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -51,6 +53,7 @@ export function GymSessionDetailSheet({
       if (cancelled) return;
       setDetail(sessionDetail);
       setExercises(exerciseList);
+      setNotesValue(sessionDetail?.notes ?? "");
     });
     return () => {
       cancelled = true;
@@ -104,6 +107,14 @@ export function GymSessionDetailSheet({
       const exerciseList = await listGymExercisesAction();
       setExercises(exerciseList);
       setShowCustomForm(false);
+    });
+  }
+
+  function handleSaveNotes() {
+    if (!detail) return;
+    startTransition(async () => {
+      await updateGymSessionNotesAction(detail.client_uuid, notesValue || null);
+      reload();
     });
   }
 
@@ -223,6 +234,24 @@ export function GymSessionDetailSheet({
 
               {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
             </details>
+
+            <div className="mt-4">
+              <label className="text-xs font-medium text-neutral-500">Notes</label>
+              <textarea
+                value={notesValue}
+                onChange={(e) => setNotesValue(e.target.value)}
+                placeholder="Add session notes..."
+                className={`${FIELD_CLASS} mt-1 min-h-20 resize-none`}
+              />
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={handleSaveNotes}
+                className="mt-2 w-full rounded-md bg-neutral-900 px-3 py-2 text-sm text-white dark:bg-neutral-100 dark:text-neutral-900"
+              >
+                Save notes
+              </button>
+            </div>
           </>
         )}
 

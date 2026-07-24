@@ -14,6 +14,7 @@ import {
   getWeeklyPlan,
   listGymExercises,
   setPlanForDay,
+  updateGymSessionNotes,
   upsertGymSession,
   type GymExerciseRow,
   type GymSessionDetail,
@@ -79,6 +80,12 @@ export async function deleteGymSetAction(clientUuid: string): Promise<void> {
 export async function deleteGymSessionAction(clientUuid: string): Promise<void> {
   const conn = await getConnection();
   await deleteGymSession(conn, clientUuid);
+  updateTag(DASHBOARD_DATA_TAG);
+}
+
+export async function updateGymSessionNotesAction(clientUuid: string, notes: string | null): Promise<void> {
+  const conn = await getConnection();
+  await updateGymSessionNotes(conn, clientUuid, notes);
   updateTag(DASHBOARD_DATA_TAG);
 }
 
