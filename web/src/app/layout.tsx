@@ -20,6 +20,9 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Training",
   },
+  icons: {
+    apple: "/icon-512.png",
+  },
 };
 
 export const viewport: Viewport = {
