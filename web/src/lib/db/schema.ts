@@ -179,6 +179,19 @@ export const SCHEMA_STATEMENTS: readonly string[] = [
     position INTEGER NOT NULL,
     created_at TIMESTAMP DEFAULT current_timestamp
   )`,
+  `ALTER TABLE gym_sets ADD COLUMN IF NOT EXISTS is_warmup BOOLEAN DEFAULT FALSE`,
+  `ALTER TABLE gym_sets ADD COLUMN IF NOT EXISTS rpe DOUBLE`,
+  `ALTER TABLE gym_plan_exercises ADD COLUMN IF NOT EXISTS target_sets INTEGER`,
+  `ALTER TABLE gym_plan_exercises ADD COLUMN IF NOT EXISTS target_reps INTEGER`,
+  `ALTER TABLE gym_plan_exercises ADD COLUMN IF NOT EXISTS superset_group INTEGER`,
+  `CREATE SEQUENCE IF NOT EXISTS body_weight_logs_id_seq START 1`,
+  `CREATE TABLE IF NOT EXISTS body_weight_logs (
+    id INTEGER PRIMARY KEY DEFAULT nextval('body_weight_logs_id_seq'),
+    client_uuid VARCHAR UNIQUE,
+    logged_date DATE NOT NULL,
+    weight_kg DOUBLE NOT NULL,
+    created_at TIMESTAMP DEFAULT current_timestamp
+  )`,
   ...buildGymExerciseSeedStatements(),
 ];
 
