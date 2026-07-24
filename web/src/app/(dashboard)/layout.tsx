@@ -21,7 +21,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const lastSynced = await getLastSynced(await getConnection());
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="flex min-h-dvh flex-col pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex w-full max-w-3xl items-center justify-end gap-2 px-4 pt-2 text-right text-xs text-neutral-400">
         <span>{lastSynced != null ? `Last synced ${formatLastSynced(lastSynced)}` : "Not synced yet"}</span>
         <span aria-hidden="true">·</span>

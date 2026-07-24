@@ -12,7 +12,7 @@ import { GymStatusHeader } from "@/components/gym/GymStatusHeader";
 // full reasoning.
 export default function GymLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="flex min-h-dvh flex-col pt-[env(safe-area-inset-top)]">
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-24 pt-4">
         <GymOfflineProvider>
           <GymStatusHeader />
