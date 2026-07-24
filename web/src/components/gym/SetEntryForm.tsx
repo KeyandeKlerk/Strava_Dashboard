@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useGymOffline } from "@/lib/gymOffline/context";
 import { useWeightUnit } from "@/lib/gymOffline/useWeightUnit";
 import { unlockRestTimerAudio } from "@/lib/gymRestTimerAudio";
+import { calculatePlates, DEFAULT_BAR_KG, DEFAULT_BAR_LB } from "@/lib/plateCalculator";
 import type { CachedExercise } from "@/lib/gymOffline/db";
 
 const FIELD_CLASS =
@@ -38,8 +39,13 @@ export function SetEntryForm({
   const [isWarmup, setIsWarmup] = useState(false);
   const [rpe, setRpe] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [showPlates, setShowPlates] = useState(false);
   const lastPerformance = lastPerformanceByExercise[exercise.id];
   const hasTargetPair = target != null && target.sets != null && target.reps != null;
+
+  const barWeight = unit === "lb" ? DEFAULT_BAR_LB : DEFAULT_BAR_KG;
+  const weightValue = weight ? Number(weight) : 0;
+  const platesResult = weightValue > 0 ? calculatePlates(weightValue, barWeight, unit) : null;
 
   async function handleSubmit(formData: FormData) {
     // Must be the first synchronous statement in this handler (before any
@@ -137,6 +143,42 @@ export function SetEntryForm({
           className={FIELD_CLASS}
         />
       </div>
+      {weightValue > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowPlates(!showPlates)}
+            className="mt-2 text-xs text-neutral-600 underline dark:text-neutral-400"
+          >
+            Plates
+          </button>
+          {showPlates && platesResult && (
+            <div className="mt-2 rounded bg-neutral-100 p-2 text-xs dark:bg-neutral-800">
+              <div className="text-neutral-700 dark:text-neutral-300">
+                Bar: {barWeight}
+                {unit}
+              </div>
+              {platesResult.platesPerSide.length > 0 ? (
+                <>
+                  <div className="text-neutral-700 dark:text-neutral-300">
+                    Per side: {platesResult.platesPerSide.join(" + ")}
+                    {unit}
+                  </div>
+                  {platesResult.remainder > 0.01 && (
+                    <div className="mt-1 text-neutral-500 dark:text-neutral-400">
+                      (+ {platesResult.remainder.toFixed(2)}{unit} remainder)
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-neutral-500 dark:text-neutral-400">
+                  Lighter than bar weight — no plates needed
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
       <input
         name="rpe"
         type="number"
