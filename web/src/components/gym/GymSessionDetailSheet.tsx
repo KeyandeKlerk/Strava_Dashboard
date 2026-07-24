@@ -143,6 +143,7 @@ export function GymSessionDetailSheet({
                             <span>
                               Set {s.set_number}: {toDisplay(s.weight_kg).toFixed(1)}
                               {unit} x {s.reps}
+                              {s.rpe != null && ` @RPE ${s.rpe}`}
                               {s.is_warmup && (
                                 <span className="ml-2 rounded bg-neutral-200 px-1 py-0.5 text-[10px] font-medium not-italic text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
                                   W

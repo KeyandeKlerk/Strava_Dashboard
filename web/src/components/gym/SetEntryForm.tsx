@@ -27,6 +27,7 @@ export function SetEntryForm({
   const [weight, setWeight] = useState("");
   const [reps, setReps] = useState("");
   const [isWarmup, setIsWarmup] = useState(false);
+  const [rpe, setRpe] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   async function handleSubmit(formData: FormData) {
@@ -34,6 +35,18 @@ export function SetEntryForm({
     const repsValue = Number(formData.get("reps"));
     if (!Number.isFinite(weightValue) || weightValue <= 0) return;
     if (!Number.isInteger(repsValue) || repsValue <= 0) return;
+
+    // RPE is optional — blank means "not recorded". Out-of-range/garbage
+    // input is silently rejected (set isn't logged) rather than clamped or
+    // coerced, matching the weight/reps guards above.
+    const rpeRaw = formData.get("rpe");
+    const rpeText = typeof rpeRaw === "string" ? rpeRaw.trim() : "";
+    let rpeValue: number | null = null;
+    if (rpeText !== "") {
+      const parsed = Number(rpeText);
+      if (!Number.isFinite(parsed) || parsed < 1 || parsed > 10) return;
+      rpeValue = parsed;
+    }
 
     setIsSaving(true);
     try {
@@ -44,12 +57,14 @@ export function SetEntryForm({
         weightKg: toKg(weightValue),
         reps: repsValue,
         isWarmup,
+        rpe: rpeValue,
       });
       setWeight("");
       setReps("");
       // Warm-ups are the exception, not the rule — don't carry the checked
       // state forward to the next set.
       setIsWarmup(false);
+      setRpe("");
     } finally {
       setIsSaving(false);
     }
@@ -92,6 +107,18 @@ export function SetEntryForm({
           className={FIELD_CLASS}
         />
       </div>
+      <input
+        name="rpe"
+        type="number"
+        inputMode="decimal"
+        step="0.5"
+        min="1"
+        max="10"
+        value={rpe}
+        onChange={(e) => setRpe(e.target.value)}
+        placeholder="RPE (optional)"
+        className={`mt-2 ${FIELD_CLASS}`}
+      />
       <label className="mt-2 flex items-center gap-2 text-xs text-neutral-500">
         <input
           type="checkbox"

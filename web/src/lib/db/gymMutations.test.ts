@@ -221,6 +221,39 @@ describe("addGymSet", () => {
     const detail = await getGymSessionDetail(conn, session.id);
     expect(detail?.sets[0].is_warmup).toBe(true);
   });
+
+  it("defaults rpe to null when not provided", async () => {
+    const session = await upsertGymSession(conn, { client_uuid: "sess-rpe-default", session_date: "2026-07-20" });
+    const exercises = await listGymExercises(conn);
+    await addGymSet(conn, {
+      client_uuid: "set-rpe-default",
+      session_client_uuid: "sess-rpe-default",
+      exercise_id: exercises[0].id,
+      set_number: 1,
+      weight_kg: 50,
+      reps: 10,
+    });
+
+    const detail = await getGymSessionDetail(conn, session.id);
+    expect(detail?.sets[0].rpe).toBe(null);
+  });
+
+  it("persists rpe and round-trips it through getGymSessionDetail", async () => {
+    const session = await upsertGymSession(conn, { client_uuid: "sess-rpe-set", session_date: "2026-07-20" });
+    const exercises = await listGymExercises(conn);
+    await addGymSet(conn, {
+      client_uuid: "set-rpe-set",
+      session_client_uuid: "sess-rpe-set",
+      exercise_id: exercises[0].id,
+      set_number: 1,
+      weight_kg: 20,
+      reps: 15,
+      rpe: 8.5,
+    });
+
+    const detail = await getGymSessionDetail(conn, session.id);
+    expect(detail?.sets[0].rpe).toBe(8.5);
+  });
 });
 
 describe("deleteGymSet", () => {

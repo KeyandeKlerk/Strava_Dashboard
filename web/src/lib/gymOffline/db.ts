@@ -41,6 +41,7 @@ export interface CachedSet {
   weightKg: number;
   reps: number;
   isWarmup: boolean;
+  rpe: number | null;
 }
 
 // Read-only mirror of listRecentGymSessions, for the /gym history list.

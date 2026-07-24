@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { client_uuid, session_client_uuid, exercise_id, set_number, weight_kg, reps, is_warmup } = body ?? {};
+  const { client_uuid, session_client_uuid, exercise_id, set_number, weight_kg, reps, is_warmup, rpe } = body ?? {};
 
   if (typeof client_uuid !== "string" || !client_uuid) {
     return NextResponse.json({ error: "client_uuid is required" }, { status: 400 });
@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
     weight_kg,
     reps,
     is_warmup: typeof is_warmup === "boolean" ? is_warmup : undefined,
+    rpe: typeof rpe === "number" ? rpe : undefined,
   });
 
   if ("error" in result) {

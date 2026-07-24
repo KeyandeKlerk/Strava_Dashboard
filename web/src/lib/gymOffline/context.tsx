@@ -44,6 +44,7 @@ interface LogSetInput {
   weightKg: number;
   reps: number;
   isWarmup?: boolean;
+  rpe?: number | null;
 }
 
 interface AddCustomExerciseInput {
@@ -240,6 +241,7 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
       const db = await getGymOfflineDb();
       const clientUuid = newUuid();
       const isWarmup = input.isWarmup ?? false;
+      const rpe = input.rpe ?? null;
       const set: CachedSet = {
         clientUuid,
         sessionClientUuid: input.sessionClientUuid,
@@ -248,6 +250,7 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
         weightKg: input.weightKg,
         reps: input.reps,
         isWarmup,
+        rpe,
       };
       await putSetCache(db, set);
 
@@ -258,6 +261,7 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
         weight_kg: input.weightKg,
         reps: input.reps,
         is_warmup: isWarmup,
+        rpe,
       };
       // A negative id marks a custom exercise that hasn't synced yet —
       // reference it by client_uuid so the queue can resolve the real id

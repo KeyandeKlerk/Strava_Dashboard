@@ -35,6 +35,7 @@ export function ActiveSessionSets({ sets }: { sets: CachedSet[] }) {
                   <span>
                     Set {set.setNumber}: {toDisplay(set.weightKg).toFixed(1)}
                     {unit} x {set.reps}
+                    {set.rpe != null && ` @RPE ${set.rpe}`}
                     {set.isWarmup && (
                       <span className="ml-2 rounded bg-neutral-200 px-1 py-0.5 text-[10px] font-medium not-italic text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
                         W
