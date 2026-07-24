@@ -22,13 +22,14 @@ export function SetEntryForm({
   showNext: boolean;
   onNext: () => void;
 }) {
-  const { logSet } = useGymOffline();
-  const { unit, toKg } = useWeightUnit();
+  const { logSet, lastPerformanceByExercise } = useGymOffline();
+  const { unit, toKg, toDisplay } = useWeightUnit();
   const [weight, setWeight] = useState("");
   const [reps, setReps] = useState("");
   const [isWarmup, setIsWarmup] = useState(false);
   const [rpe, setRpe] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const lastPerformance = lastPerformanceByExercise[exercise.id];
 
   async function handleSubmit(formData: FormData) {
     const weightValue = Number(formData.get("weight"));
@@ -81,6 +82,11 @@ export function SetEntryForm({
           Swap
         </button>
       </div>
+      {lastPerformance && (
+        <p className="mt-1 text-xs text-neutral-500">
+          Last time: {lastPerformance.sets.map((s) => `${toDisplay(s.weightKg).toFixed(1)}${unit} × ${s.reps}`).join(", ")}
+        </p>
+      )}
       <div className="mt-2 flex gap-2">
         <input
           name="weight"

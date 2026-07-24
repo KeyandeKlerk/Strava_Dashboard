@@ -5,7 +5,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   getGymOfflineDb,
   listExercisesCache,
+  listLastPerformanceCache,
   listPlanCache,
+  replaceLastPerformanceCache,
   replacePlanCache,
   resetGymOfflineDbForTests,
   type GymOfflineDb,
@@ -29,6 +31,67 @@ describe("planCache", () => {
 
     await replacePlanCache(db, [{ dayOfWeek: "Friday", exerciseIds: [4] }]);
     expect(await listPlanCache(db)).toEqual([{ dayOfWeek: "Friday", exerciseIds: [4] }]);
+  });
+});
+
+describe("lastPerformanceCache", () => {
+  it("stores and replaces the last-performance-by-exercise cache", async () => {
+    await replaceLastPerformanceCache(db, [
+      { exerciseId: 1, sessionDate: "2026-07-20", sets: [{ setNumber: 1, weightKg: 60, reps: 8 }] },
+      { exerciseId: 2, sessionDate: "2026-07-19", sets: [{ setNumber: 1, weightKg: 20, reps: 15 }] },
+    ]);
+    expect(await listLastPerformanceCache(db)).toHaveLength(2);
+
+    await replaceLastPerformanceCache(db, [
+      { exerciseId: 3, sessionDate: "2026-07-21", sets: [{ setNumber: 1, weightKg: 100, reps: 5 }] },
+    ]);
+    expect(await listLastPerformanceCache(db)).toEqual([
+      { exerciseId: 3, sessionDate: "2026-07-21", sets: [{ setNumber: 1, weightKg: 100, reps: 5 }] },
+    ]);
+  });
+});
+
+describe("v2 -> v3 migration", () => {
+  it("adds lastPerformanceCache to an existing v2 database without losing existing data", async () => {
+    globalThis.indexedDB = new IDBFactory();
+    resetGymOfflineDbForTests();
+
+    // Simulate an install that's already on the current (pre-this-change) v2 schema.
+    const v2 = await openDB("gym-offline", 2, {
+      upgrade(db) {
+        const mutations = db.createObjectStore("pendingMutations", { keyPath: "clientUuid" });
+        mutations.createIndex("by-createdAt", "createdAt");
+        db.createObjectStore("exercisesCache", { keyPath: "id" });
+        db.createObjectStore("sessionsCache", { keyPath: "clientUuid" });
+        const sets = db.createObjectStore("setsCache", { keyPath: "clientUuid" });
+        sets.createIndex("by-sessionClientUuid", "sessionClientUuid");
+        db.createObjectStore("recentSessionsCache", { keyPath: "id" });
+        db.createObjectStore("planCache", { keyPath: "dayOfWeek" });
+      },
+    });
+    await v2.put("exercisesCache", {
+      id: 1,
+      client_uuid: null,
+      name: "Existing Exercise",
+      muscle_group: "Chest",
+      equipment: null,
+      is_custom: false,
+    });
+    await v2.put("planCache", { dayOfWeek: "Monday", exerciseIds: [1] });
+    v2.close();
+
+    const migrated = await getGymOfflineDb();
+    const exercises = await listExercisesCache(migrated);
+    expect(exercises).toHaveLength(1);
+    expect(exercises[0].name).toBe("Existing Exercise");
+    expect(await listPlanCache(migrated)).toEqual([{ dayOfWeek: "Monday", exerciseIds: [1] }]);
+
+    await replaceLastPerformanceCache(migrated, [
+      { exerciseId: 1, sessionDate: "2026-07-20", sets: [{ setNumber: 1, weightKg: 60, reps: 8 }] },
+    ]);
+    expect(await listLastPerformanceCache(migrated)).toEqual([
+      { exerciseId: 1, sessionDate: "2026-07-20", sets: [{ setNumber: 1, weightKg: 60, reps: 8 }] },
+    ]);
   });
 });
 

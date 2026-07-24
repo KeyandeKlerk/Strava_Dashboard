@@ -300,6 +300,51 @@ export async function correlateGymSessionsToActivities(conn: DuckDBConnection): 
   return Number(row?.count ?? 0);
 }
 
+export interface LastPerformanceSet {
+  setNumber: number;
+  weightKg: number;
+  reps: number;
+}
+
+export interface LastPerformanceEntry {
+  sessionDate: string;
+  sets: LastPerformanceSet[];
+}
+
+// For each exercise, all sets belonging to its single most recent prior
+// session. All sets sharing the top session_id for an exercise tie on
+// (session_date, session_id) in the RANK() window, so rnk = 1 naturally
+// selects every set from that one most-recent session, not just one row.
+export async function getLastPerformanceByExercise(
+  conn: DuckDBConnection,
+): Promise<Record<number, LastPerformanceEntry>> {
+  const rows = await queryRows<{
+    exercise_id: number;
+    session_date: string;
+    set_number: number;
+    weight_kg: number;
+    reps: number;
+  }>(
+    conn,
+    `WITH ranked AS (
+       SELECT st.exercise_id, gs.session_date, gs.id AS session_id, st.set_number, st.weight_kg, st.reps,
+              RANK() OVER (PARTITION BY st.exercise_id ORDER BY gs.session_date DESC, gs.id DESC) AS rnk
+       FROM gym_sets st JOIN gym_sessions gs ON gs.id = st.session_id
+     )
+     SELECT exercise_id, session_date::VARCHAR AS session_date, set_number, weight_kg, reps
+     FROM ranked WHERE rnk = 1
+     ORDER BY exercise_id, set_number`,
+  );
+
+  const byExercise: Record<number, LastPerformanceEntry> = {};
+  for (const row of rows) {
+    const entry = byExercise[row.exercise_id] ?? { sessionDate: row.session_date, sets: [] };
+    entry.sets.push({ setNumber: row.set_number, weightKg: row.weight_kg, reps: row.reps });
+    byExercise[row.exercise_id] = entry;
+  }
+  return byExercise;
+}
+
 export async function getWeeklyPlan(conn: DuckDBConnection): Promise<Record<string, GymExerciseRow[]>> {
   const rows = await queryRows<{
     day_of_week: string;

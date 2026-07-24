@@ -3,16 +3,17 @@
 // independent of a full page reload.
 import { NextResponse } from "next/server";
 import { getConnection } from "@/lib/db/client";
-import { getWeeklyPlan, listGymExercises, listRecentGymSessions } from "@/lib/db/gymMutations";
+import { getLastPerformanceByExercise, getWeeklyPlan, listGymExercises, listRecentGymSessions } from "@/lib/db/gymMutations";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   const conn = await getConnection();
-  const [exercises, recentSessions, plan] = await Promise.all([
+  const [exercises, recentSessions, plan, lastPerformance] = await Promise.all([
     listGymExercises(conn),
     listRecentGymSessions(conn),
     getWeeklyPlan(conn),
+    getLastPerformanceByExercise(conn),
   ]);
   // Reshaped to just exercise ids per day — the client already caches full
   // exercise rows separately (exercisesCache) and resolves plan entries
@@ -21,5 +22,5 @@ export async function GET() {
   const planByDay = Object.fromEntries(
     Object.entries(plan).map(([day, dayExercises]) => [day, dayExercises.map((e) => e.id)]),
   );
-  return NextResponse.json({ exercises, recentSessions, planByDay });
+  return NextResponse.json({ exercises, recentSessions, planByDay, lastPerformanceByExercise: lastPerformance });
 }

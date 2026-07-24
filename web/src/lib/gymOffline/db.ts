@@ -63,6 +63,22 @@ export interface CachedPlanDay {
   exerciseIds: number[]; // in position order
 }
 
+export interface CachedLastPerformanceSet {
+  setNumber: number;
+  weightKg: number;
+  reps: number;
+}
+
+// Read-only mirror of getLastPerformanceByExercise, refreshed wholesale on
+// bootstrap (see context.tsx). Reflects state as of session start only —
+// never includes sets logged earlier in the current live session, since
+// bootstrap() runs once on mount and isn't re-triggered by later flushes.
+export interface CachedLastPerformance {
+  exerciseId: number;
+  sessionDate: string;
+  sets: CachedLastPerformanceSet[];
+}
+
 interface GymOfflineSchema extends DBSchema {
   pendingMutations: {
     key: string;
@@ -90,12 +106,16 @@ interface GymOfflineSchema extends DBSchema {
     key: string;
     value: CachedPlanDay;
   };
+  lastPerformanceCache: {
+    key: number;
+    value: CachedLastPerformance;
+  };
 }
 
 export type GymOfflineDb = IDBPDatabase<GymOfflineSchema>;
 
 const DB_NAME = "gym-offline";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbPromise: Promise<GymOfflineDb> | null = null;
 
@@ -122,6 +142,9 @@ export function getGymOfflineDb(): Promise<GymOfflineDb> {
         }
         if (!db.objectStoreNames.contains("planCache")) {
           db.createObjectStore("planCache", { keyPath: "dayOfWeek" });
+        }
+        if (!db.objectStoreNames.contains("lastPerformanceCache")) {
+          db.createObjectStore("lastPerformanceCache", { keyPath: "exerciseId" });
         }
       },
     });
@@ -241,4 +264,15 @@ export async function replacePlanCache(db: GymOfflineDb, days: CachedPlanDay[]):
 
 export async function listPlanCache(db: GymOfflineDb): Promise<CachedPlanDay[]> {
   return db.getAll("planCache");
+}
+
+export async function replaceLastPerformanceCache(db: GymOfflineDb, entries: CachedLastPerformance[]): Promise<void> {
+  const tx = db.transaction("lastPerformanceCache", "readwrite");
+  await tx.store.clear();
+  for (const entry of entries) await tx.store.put(entry);
+  await tx.done;
+}
+
+export async function listLastPerformanceCache(db: GymOfflineDb): Promise<CachedLastPerformance[]> {
+  return db.getAll("lastPerformanceCache");
 }

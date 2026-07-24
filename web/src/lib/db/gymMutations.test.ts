@@ -11,6 +11,7 @@ import {
   deleteGymSet,
   getGymSessionByActivityId,
   getGymSessionDetail,
+  getLastPerformanceByExercise,
   getWeeklyPlan,
   listGymExercises,
   listRecentGymSessions,
@@ -413,6 +414,74 @@ describe("correlateGymSessionsToActivities", () => {
     await correlateGymSessionsToActivities(conn);
     const detail = await getGymSessionDetail(conn, session.id);
     expect(detail?.activity_id).toBeNull();
+  });
+});
+
+describe("getLastPerformanceByExercise", () => {
+  it("returns all sets from only the single most recent prior session, not older ones", async () => {
+    const exercises = await listGymExercises(conn);
+    const exerciseId = exercises[0].id;
+
+    // Older session (2 sets) — should NOT show up.
+    await upsertGymSession(conn, { client_uuid: "lp-sess-old", session_date: "2026-07-10" });
+    await addGymSet(conn, {
+      client_uuid: "lp-set-old-1",
+      session_client_uuid: "lp-sess-old",
+      exercise_id: exerciseId,
+      set_number: 1,
+      weight_kg: 40,
+      reps: 12,
+    });
+    await addGymSet(conn, {
+      client_uuid: "lp-set-old-2",
+      session_client_uuid: "lp-sess-old",
+      exercise_id: exerciseId,
+      set_number: 2,
+      weight_kg: 40,
+      reps: 10,
+    });
+
+    // Most recent prior session (3 sets) — should be the one returned, in full.
+    await upsertGymSession(conn, { client_uuid: "lp-sess-recent", session_date: "2026-07-20" });
+    await addGymSet(conn, {
+      client_uuid: "lp-set-recent-1",
+      session_client_uuid: "lp-sess-recent",
+      exercise_id: exerciseId,
+      set_number: 1,
+      weight_kg: 60,
+      reps: 8,
+    });
+    await addGymSet(conn, {
+      client_uuid: "lp-set-recent-2",
+      session_client_uuid: "lp-sess-recent",
+      exercise_id: exerciseId,
+      set_number: 2,
+      weight_kg: 60,
+      reps: 8,
+    });
+    await addGymSet(conn, {
+      client_uuid: "lp-set-recent-3",
+      session_client_uuid: "lp-sess-recent",
+      exercise_id: exerciseId,
+      set_number: 3,
+      weight_kg: 65,
+      reps: 6,
+    });
+
+    const result = await getLastPerformanceByExercise(conn);
+    const entry = result[exerciseId];
+    expect(entry).toBeDefined();
+    expect(entry.sessionDate).toContain("2026-07-20");
+    expect(entry.sets).toEqual([
+      { setNumber: 1, weightKg: 60, reps: 8 },
+      { setNumber: 2, weightKg: 60, reps: 8 },
+      { setNumber: 3, weightKg: 65, reps: 6 },
+    ]);
+  });
+
+  it("does not include an exercise with no logged sets", async () => {
+    const result = await getLastPerformanceByExercise(conn);
+    expect(Object.keys(result)).toHaveLength(0);
   });
 });
 
