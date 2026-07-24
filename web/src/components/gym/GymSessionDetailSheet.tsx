@@ -13,6 +13,7 @@ import { useWeightUnit } from "@/lib/gymOffline/useWeightUnit";
 import { MUSCLE_GROUPS } from "@/lib/db/gymExerciseSeed";
 import { FIELD_CLASS } from "@/lib/uiStyles";
 import type { GymExerciseRow, GymSessionDetail } from "@/lib/db/gymMutations";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 
 // Viewing/editing a session's history — reached from WorkoutDetailSheet (an
 // activity-linked session) or the /gym history list (a standalone one).
@@ -124,7 +125,7 @@ export function GymSessionDetailSheet({
         className="w-full max-w-3xl rounded-t-xl bg-white p-4 dark:bg-neutral-950"
         onClick={(e) => e.stopPropagation()}
       >
-        {detail === undefined && <p className="text-sm text-neutral-500">Loading...</p>}
+        {detail === undefined && <LoadingSpinner />}
         {detail === null && <p className="text-sm text-neutral-500">Couldn&apos;t find that session.</p>}
         {detail && (
           <>

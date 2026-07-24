@@ -7,6 +7,7 @@ import type { ActivityDetailRow } from "@/lib/metrics";
 import { StatCard } from "@/components/StatCard";
 import { GymSessionDetailSheet } from "@/components/gym/GymSessionDetailSheet";
 import { FIELD_CLASS } from "@/lib/uiStyles";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 
 const ZONE_LABELS: Array<[keyof ActivityDetailRow, string]> = [
   ["z1_min", "Z1"],
@@ -82,7 +83,7 @@ export function WorkoutDetailSheet({ activityId, onClose }: { activityId: number
         className="w-full max-w-3xl rounded-t-xl bg-white p-4 dark:bg-neutral-950"
         onClick={(e) => e.stopPropagation()}
       >
-        {detail === undefined && <p className="text-sm text-neutral-500">Loading...</p>}
+        {detail === undefined && <LoadingSpinner />}
         {detail === null && <p className="text-sm text-neutral-500">Couldn&apos;t find that activity.</p>}
         {detail && (
           <>
