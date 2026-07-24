@@ -1,6 +1,7 @@
 "use client";
 import { useGymOffline } from "@/lib/gymOffline/context";
 import { useWeightUnit } from "@/lib/gymOffline/useWeightUnit";
+import { TAP_TARGET_CLASS } from "@/lib/uiStyles";
 import type { CachedSet } from "@/lib/gymOffline/db";
 
 export function ActiveSessionSets({ sets }: { sets: CachedSet[] }) {
@@ -42,7 +43,7 @@ export function ActiveSessionSets({ sets }: { sets: CachedSet[] }) {
                       </span>
                     )}
                   </span>
-                  <button type="button" onClick={() => deleteSet(set.clientUuid)} className="text-xs text-red-600">
+                  <button type="button" onClick={() => deleteSet(set.clientUuid)} className={`text-xs text-red-600 ${TAP_TARGET_CLASS}`}>
                     Remove
                   </button>
                 </div>

@@ -8,7 +8,7 @@ import {
   isContiguousSelection,
   normalizeGroups,
 } from "@/lib/gymSupersets";
-import { FIELD_CLASS } from "@/lib/uiStyles";
+import { FIELD_CLASS, TAP_TARGET_CLASS } from "@/lib/uiStyles";
 import type { GymExerciseRow, PlanExerciseRow } from "@/lib/db/gymMutations";
 
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
@@ -100,7 +100,7 @@ function PlanExercisePicker({
         </form>
       )}
 
-      <button type="button" onClick={onCancel} className="mt-2 text-xs text-neutral-500">
+      <button type="button" onClick={onCancel} className={`mt-2 text-xs text-neutral-500 ${TAP_TARGET_CLASS}`}>
         Cancel
       </button>
     </div>
@@ -233,7 +233,7 @@ export function PlanBuilder({
           </label>
           <div className="flex items-center gap-3 text-xs text-neutral-500">
             {extraControls}
-            <button type="button" onClick={() => removeExercise(index)} className="text-red-600">
+            <button type="button" onClick={() => removeExercise(index)} className={`text-red-600 ${TAP_TARGET_CLASS}`}>
               Remove
             </button>
           </div>
@@ -318,7 +318,7 @@ export function PlanBuilder({
             >
               Group selected ({selectedIds.size})
             </button>
-            <button type="button" onClick={() => setSelectedIds(new Set())} className="text-neutral-500">
+            <button type="button" onClick={() => setSelectedIds(new Set())} className={`text-neutral-500 ${TAP_TARGET_CLASS}`}>
               Clear
             </button>
           </div>
@@ -329,10 +329,20 @@ export function PlanBuilder({
         {items.map((item, itemIndex) => {
           const moveControls = (
             <>
-              <button type="button" onClick={() => moveItem(itemIndex, -1)} disabled={itemIndex === 0}>
+              <button
+                type="button"
+                onClick={() => moveItem(itemIndex, -1)}
+                disabled={itemIndex === 0}
+                className={`text-neutral-500 disabled:opacity-30 dark:text-neutral-400 ${TAP_TARGET_CLASS}`}
+              >
                 ↑
               </button>
-              <button type="button" onClick={() => moveItem(itemIndex, 1)} disabled={itemIndex === items.length - 1}>
+              <button
+                type="button"
+                onClick={() => moveItem(itemIndex, 1)}
+                disabled={itemIndex === items.length - 1}
+                className={`text-neutral-500 disabled:opacity-30 dark:text-neutral-400 ${TAP_TARGET_CLASS}`}
+              >
                 ↓
               </button>
             </>
@@ -364,7 +374,7 @@ export function PlanBuilder({
                   <button
                     type="button"
                     onClick={() => ungroupGroup(item.groupId)}
-                    className="text-violet-600 dark:text-violet-400"
+                    className={`text-violet-600 dark:text-violet-400 ${TAP_TARGET_CLASS}`}
                   >
                     Ungroup
                   </button>
