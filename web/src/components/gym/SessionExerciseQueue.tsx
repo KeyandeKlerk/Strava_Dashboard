@@ -8,6 +8,17 @@ import type { CachedExercise, CachedSet } from "@/lib/gymOffline/db";
 
 type PickerMode = null | "add" | "swap";
 
+// A queue slot: which exercise (by key) plus its plan-derived target/grouping
+// fields. supersetGroup is carried through unused for now — the round-robin
+// grouping behaviour lands in a later task; this component just seeds and
+// preserves the field so that task has the shape to build on.
+interface QueueEntry {
+  key: string;
+  targetSets: number | null;
+  targetReps: number | null;
+  supersetGroup: number | null;
+}
+
 export function SessionExerciseQueue({
   sessionClientUuid,
   activeSessionSets,
@@ -18,7 +29,7 @@ export function SessionExerciseQueue({
   planDayName: string;
 }) {
   const { exercises, planByDay } = useGymOffline();
-  const [queueKeys, setQueueKeys] = useState<string[]>([]);
+  const [queueEntries, setQueueEntries] = useState<QueueEntry[]>([]);
   const [currentKey, setCurrentKey] = useState<string | null>(null);
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [seeded, setSeeded] = useState(false);
@@ -27,43 +38,68 @@ export function SessionExerciseQueue({
   // (needed to resolve plan exercise ids to CachedExercise objects) is
   // loaded. Only ever seeds once per mount — re-running this whenever
   // `exercises` refreshes (e.g. after every set logged) would stomp on
-  // later swap/add/next interactions.
+  // later swap/add/next interactions. Each seeded slot carries the plan
+  // entry's target sets/reps (and superset group, unused for now).
   useEffect(() => {
     if (seeded || exercises.length === 0) return;
-    const planIds = planByDay[planDayName] ?? [];
-    const seededExercises = planIds
-      .map((id) => exercises.find((e) => e.id === id))
-      .filter((e): e is CachedExercise => e != null);
-    if (seededExercises.length > 0) {
-      setQueueKeys(seededExercises.map(keyFor));
-      setCurrentKey(keyFor(seededExercises[0]));
+    const planEntries = planByDay[planDayName] ?? [];
+    const seededEntries = planEntries
+      .map((entry): QueueEntry | null => {
+        const exercise = exercises.find((e) => e.id === entry.exerciseId);
+        if (!exercise) return null;
+        return {
+          key: keyFor(exercise),
+          targetSets: entry.targetSets,
+          targetReps: entry.targetReps,
+          supersetGroup: entry.supersetGroup,
+        };
+      })
+      .filter((e): e is QueueEntry => e != null);
+    if (seededEntries.length > 0) {
+      setQueueEntries(seededEntries);
+      setCurrentKey(seededEntries[0].key);
     }
     setSeeded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exercises, planByDay, planDayName, seeded]);
 
   const queueExercises = useMemo(
-    () => queueKeys.map((key) => resolveByKey(exercises, key)).filter((e): e is CachedExercise => e != null),
-    [queueKeys, exercises],
+    () => queueEntries.map((entry) => resolveByKey(exercises, entry.key)).filter((e): e is CachedExercise => e != null),
+    [queueEntries, exercises],
   );
 
   const currentExercise = resolveByKey(exercises, currentKey);
+  const currentEntry = queueEntries.find((e) => e.key === currentKey) ?? null;
 
   const loggedExerciseIds = useMemo(
     () => new Set(activeSessionSets.map((s) => s.exerciseId)),
     [activeSessionSets],
   );
 
+  // An ad-hoc exercise added mid-session has no plan target/grouping.
   function handleAdd(exercise: CachedExercise) {
     const key = keyFor(exercise);
-    setQueueKeys((prev) => (prev.includes(key) ? prev : [...prev, key]));
+    setQueueEntries((prev) =>
+      prev.some((e) => e.key === key)
+        ? prev
+        : [...prev, { key, targetSets: null, targetReps: null, supersetGroup: null }],
+    );
     setCurrentKey(key);
     setPickerMode(null);
   }
 
+  // Swapping replaces the current slot with a different exercise; its plan
+  // targets no longer apply, so null them (a later task adds grouping-aware
+  // swap handling — nothing to preserve here yet).
   function handleSwap(exercise: CachedExercise) {
     const newKey = keyFor(exercise);
-    setQueueKeys((prev) => prev.map((key) => (key === currentKey ? newKey : key)));
+    setQueueEntries((prev) =>
+      prev.map((entry) =>
+        entry.key === currentKey
+          ? { key: newKey, targetSets: null, targetReps: null, supersetGroup: null }
+          : entry,
+      ),
+    );
     setCurrentKey(newKey);
     setPickerMode(null);
   }
@@ -87,7 +123,7 @@ export function SessionExerciseQueue({
     return (
       <div>
         <ExercisePicker onSelect={pickerMode === "add" ? handleAdd : handleSwap} />
-        {(queueKeys.length > 0 || pickerMode === "swap") && (
+        {(queueEntries.length > 0 || pickerMode === "swap") && (
           <button type="button" onClick={() => setPickerMode(null)} className="mt-2 text-xs text-neutral-500">
             Cancel
           </button>
@@ -143,6 +179,7 @@ export function SessionExerciseQueue({
           sessionClientUuid={sessionClientUuid}
           exercise={currentExercise}
           nextSetNumber={nextSetNumber}
+          target={currentEntry ? { sets: currentEntry.targetSets, reps: currentEntry.targetReps } : undefined}
           onSwap={() => setPickerMode("swap")}
           showNext={hasLoggedCurrent}
           onNext={handleNext}

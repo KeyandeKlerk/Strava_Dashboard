@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { addCustomExerciseAction, setPlanForDayAction } from "@/lib/gymActions";
 import { MUSCLE_GROUPS } from "@/lib/db/gymExerciseSeed";
-import type { GymExerciseRow } from "@/lib/db/gymMutations";
+import type { GymExerciseRow, PlanExerciseRow } from "@/lib/db/gymMutations";
 
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
 
@@ -107,7 +107,7 @@ export function PlanBuilder({
   initialPlan,
   allExercises,
 }: {
-  initialPlan: Record<string, GymExerciseRow[]>;
+  initialPlan: Record<string, PlanExerciseRow[]>;
   allExercises: GymExerciseRow[];
 }) {
   const [plan, setPlan] = useState(initialPlan);
@@ -117,9 +117,17 @@ export function PlanBuilder({
 
   const dayExercises = plan[selectedDay] ?? [];
 
-  async function persist(day: string, dayExercises: GymExerciseRow[]) {
+  async function persist(day: string, dayExercises: PlanExerciseRow[]) {
     setPlan((prev) => ({ ...prev, [day]: dayExercises }));
-    await setPlanForDayAction(day, dayExercises.map((e) => e.id));
+    await setPlanForDayAction(
+      day,
+      dayExercises.map((e) => ({
+        exerciseId: e.id,
+        targetSets: e.target_sets,
+        targetReps: e.target_reps,
+        supersetGroup: e.superset_group,
+      })),
+    );
   }
 
   function moveExercise(index: number, direction: -1 | 1) {
@@ -137,13 +145,29 @@ export function PlanBuilder({
     );
   }
 
+  // Update one row's target field locally (optimistic, no round-trip on every
+  // keystroke); the actual whole-list persist fires on blur (see the inputs'
+  // onBlur below). Blank input = null = "no target set".
+  function setTarget(index: number, field: "target_sets" | "target_reps", raw: string) {
+    const trimmed = raw.trim();
+    const parsed = trimmed === "" ? null : Math.trunc(Number(trimmed));
+    const value = parsed === null || !Number.isFinite(parsed) || parsed <= 0 ? null : parsed;
+    setPlan((prev) => {
+      const list = (prev[selectedDay] ?? []).map((e, i) => (i === index ? { ...e, [field]: value } : e));
+      return { ...prev, [selectedDay]: list };
+    });
+  }
+
   function addExercise(exercise: GymExerciseRow) {
     if (!exerciseLibrary.some((e) => e.id === exercise.id)) {
       setExerciseLibrary((prev) => [...prev, exercise]);
     }
     setShowPicker(false);
     if (dayExercises.some((e) => e.id === exercise.id)) return;
-    persist(selectedDay, [...dayExercises, exercise]);
+    // A newly-added exercise starts with no targets/grouping (all null) — the
+    // "just an ordered list" default, matching pre-target behaviour.
+    const planRow: PlanExerciseRow = { ...exercise, target_sets: null, target_reps: null, superset_group: null };
+    persist(selectedDay, [...dayExercises, planRow]);
   }
 
   return (
@@ -182,21 +206,53 @@ export function PlanBuilder({
         {dayExercises.map((exercise, index) => (
           <div
             key={exercise.id}
-            className="flex items-center justify-between rounded-xl border border-neutral-200 p-3 text-sm dark:border-neutral-800"
+            className="rounded-xl border border-neutral-200 p-3 text-sm dark:border-neutral-800"
           >
-            <span>
-              {index + 1}. {exercise.name}
-            </span>
-            <div className="flex items-center gap-3 text-xs text-neutral-500">
-              <button type="button" onClick={() => moveExercise(index, -1)} disabled={index === 0}>
-                ↑
-              </button>
-              <button type="button" onClick={() => moveExercise(index, 1)} disabled={index === dayExercises.length - 1}>
-                ↓
-              </button>
-              <button type="button" onClick={() => removeExercise(index)} className="text-red-600">
-                Remove
-              </button>
+            <div className="flex items-center justify-between">
+              <span>
+                {index + 1}. {exercise.name}
+              </span>
+              <div className="flex items-center gap-3 text-xs text-neutral-500">
+                <button type="button" onClick={() => moveExercise(index, -1)} disabled={index === 0}>
+                  ↑
+                </button>
+                <button type="button" onClick={() => moveExercise(index, 1)} disabled={index === dayExercises.length - 1}>
+                  ↓
+                </button>
+                <button type="button" onClick={() => removeExercise(index)} className="text-red-600">
+                  Remove
+                </button>
+              </div>
+            </div>
+            <div className="mt-2 flex items-center gap-2 text-xs text-neutral-500">
+              <label className="flex items-center gap-1">
+                Sets
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  step="1"
+                  value={exercise.target_sets ?? ""}
+                  onChange={(e) => setTarget(index, "target_sets", e.target.value)}
+                  onBlur={() => persist(selectedDay, dayExercises)}
+                  placeholder="–"
+                  className="w-14 rounded-md border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                Reps
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  step="1"
+                  value={exercise.target_reps ?? ""}
+                  onChange={(e) => setTarget(index, "target_reps", e.target.value)}
+                  onBlur={() => persist(selectedDay, dayExercises)}
+                  placeholder="–"
+                  className="w-14 rounded-md border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                />
+              </label>
             </div>
           </div>
         ))}

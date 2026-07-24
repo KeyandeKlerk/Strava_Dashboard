@@ -12,6 +12,7 @@ import {
   resetGymOfflineDbForTests,
   type GymOfflineDb,
 } from "./db";
+import type { PlanEntryInput } from "@/lib/db/gymMutations";
 
 let db: GymOfflineDb;
 
@@ -21,16 +22,30 @@ beforeEach(async () => {
   db = await getGymOfflineDb();
 });
 
+// Helper: a plan entry with all target/grouping fields defaulted to null.
+function entry(exerciseId: number, overrides: Partial<PlanEntryInput> = {}): PlanEntryInput {
+  return { exerciseId, targetSets: null, targetReps: null, supersetGroup: null, ...overrides };
+}
+
 describe("planCache", () => {
   it("stores and replaces the weekly plan", async () => {
     await replacePlanCache(db, [
-      { dayOfWeek: "Monday", exerciseIds: [1, 2] },
-      { dayOfWeek: "Wednesday", exerciseIds: [3] },
+      { dayOfWeek: "Monday", entries: [entry(1), entry(2)] },
+      { dayOfWeek: "Wednesday", entries: [entry(3)] },
     ]);
     expect(await listPlanCache(db)).toHaveLength(2);
 
-    await replacePlanCache(db, [{ dayOfWeek: "Friday", exerciseIds: [4] }]);
-    expect(await listPlanCache(db)).toEqual([{ dayOfWeek: "Friday", exerciseIds: [4] }]);
+    await replacePlanCache(db, [{ dayOfWeek: "Friday", entries: [entry(4)] }]);
+    expect(await listPlanCache(db)).toEqual([{ dayOfWeek: "Friday", entries: [entry(4)] }]);
+  });
+
+  it("round-trips target sets/reps and superset group on entries", async () => {
+    await replacePlanCache(db, [
+      { dayOfWeek: "Monday", entries: [entry(1, { targetSets: 3, targetReps: 8, supersetGroup: 1 })] },
+    ]);
+    expect(await listPlanCache(db)).toEqual([
+      { dayOfWeek: "Monday", entries: [{ exerciseId: 1, targetSets: 3, targetReps: 8, supersetGroup: 1 }] },
+    ]);
   });
 });
 
@@ -77,14 +92,14 @@ describe("v2 -> v3 migration", () => {
       equipment: null,
       is_custom: false,
     });
-    await v2.put("planCache", { dayOfWeek: "Monday", exerciseIds: [1] });
+    await v2.put("planCache", { dayOfWeek: "Monday", entries: [entry(1)] });
     v2.close();
 
     const migrated = await getGymOfflineDb();
     const exercises = await listExercisesCache(migrated);
     expect(exercises).toHaveLength(1);
     expect(exercises[0].name).toBe("Existing Exercise");
-    expect(await listPlanCache(migrated)).toEqual([{ dayOfWeek: "Monday", exerciseIds: [1] }]);
+    expect(await listPlanCache(migrated)).toEqual([{ dayOfWeek: "Monday", entries: [entry(1)] }]);
 
     await replaceLastPerformanceCache(migrated, [
       { exerciseId: 1, sessionDate: "2026-07-20", sets: [{ setNumber: 1, weightKg: 60, reps: 8 }] },
@@ -127,7 +142,7 @@ describe("v1 -> v2 migration", () => {
     expect(exercises).toHaveLength(1);
     expect(exercises[0].name).toBe("Existing Exercise");
 
-    await replacePlanCache(migrated, [{ dayOfWeek: "Monday", exerciseIds: [1] }]);
-    expect(await listPlanCache(migrated)).toEqual([{ dayOfWeek: "Monday", exerciseIds: [1] }]);
+    await replacePlanCache(migrated, [{ dayOfWeek: "Monday", entries: [entry(1)] }]);
+    expect(await listPlanCache(migrated)).toEqual([{ dayOfWeek: "Monday", entries: [entry(1)] }]);
   });
 });

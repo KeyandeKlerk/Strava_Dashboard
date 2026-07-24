@@ -18,6 +18,7 @@ import {
   setPlanForDay,
   updateGymSessionNotes,
   upsertGymSession,
+  type PlanEntryInput,
 } from "./gymMutations";
 
 let conn: DuckDBConnection;
@@ -486,6 +487,12 @@ describe("getLastPerformanceByExercise", () => {
 });
 
 describe("getWeeklyPlan / setPlanForDay", () => {
+  // Helper: build a PlanEntryInput from an exercise id, defaulting all target/
+  // grouping fields to null (the "plain ordered list, no targets" case).
+  function entry(exerciseId: number, overrides: Partial<PlanEntryInput> = {}): PlanEntryInput {
+    return { exerciseId, targetSets: null, targetReps: null, supersetGroup: null, ...overrides };
+  }
+
   it("returns an empty plan when nothing has been set", async () => {
     const plan = await getWeeklyPlan(conn);
     expect(plan).toEqual({});
@@ -496,10 +503,40 @@ describe("getWeeklyPlan / setPlanForDay", () => {
     const squat = exercises.find((e) => e.name === "Barbell Back Squat")!;
     const legPress = exercises.find((e) => e.name === "Leg Press")!;
 
-    await setPlanForDay(conn, "Monday", [squat.id, legPress.id]);
+    await setPlanForDay(conn, "Monday", [entry(squat.id), entry(legPress.id)]);
 
     const plan = await getWeeklyPlan(conn);
     expect(plan["Monday"].map((e) => e.name)).toEqual(["Barbell Back Squat", "Leg Press"]);
+  });
+
+  it("defaults target/grouping fields to null when a plain ordered list is stored", async () => {
+    const exercises = await listGymExercises(conn);
+    const squat = exercises.find((e) => e.name === "Barbell Back Squat")!;
+
+    await setPlanForDay(conn, "Monday", [entry(squat.id)]);
+
+    const plan = await getWeeklyPlan(conn);
+    const row = plan["Monday"][0];
+    expect(row.target_sets).toBeNull();
+    expect(row.target_reps).toBeNull();
+    expect(row.superset_group).toBeNull();
+  });
+
+  it("round-trips target_sets/target_reps/superset_group when provided", async () => {
+    const exercises = await listGymExercises(conn);
+    const squat = exercises.find((e) => e.name === "Barbell Back Squat")!;
+    const legPress = exercises.find((e) => e.name === "Leg Press")!;
+
+    await setPlanForDay(conn, "Monday", [
+      entry(squat.id, { targetSets: 3, targetReps: 8, supersetGroup: 1 }),
+      entry(legPress.id, { targetSets: 4, targetReps: 12 }),
+    ]);
+
+    const plan = await getWeeklyPlan(conn);
+    expect(plan["Monday"]).toEqual([
+      expect.objectContaining({ name: "Barbell Back Squat", target_sets: 3, target_reps: 8, superset_group: 1 }),
+      expect.objectContaining({ name: "Leg Press", target_sets: 4, target_reps: 12, superset_group: null }),
+    ]);
   });
 
   it("replaces (not appends to) a day's plan on a second call", async () => {
@@ -507,11 +544,13 @@ describe("getWeeklyPlan / setPlanForDay", () => {
     const squat = exercises.find((e) => e.name === "Barbell Back Squat")!;
     const curl = exercises.find((e) => e.name === "Barbell Curl")!;
 
-    await setPlanForDay(conn, "Monday", [squat.id]);
-    await setPlanForDay(conn, "Monday", [curl.id]);
+    await setPlanForDay(conn, "Monday", [entry(squat.id, { targetSets: 5, targetReps: 5 })]);
+    await setPlanForDay(conn, "Monday", [entry(curl.id)]);
 
     const plan = await getWeeklyPlan(conn);
     expect(plan["Monday"].map((e) => e.name)).toEqual(["Barbell Curl"]);
+    // The replaced row's old targets don't linger.
+    expect(plan["Monday"][0].target_sets).toBeNull();
   });
 
   it("leaves other days untouched", async () => {
@@ -519,11 +558,22 @@ describe("getWeeklyPlan / setPlanForDay", () => {
     const squat = exercises.find((e) => e.name === "Barbell Back Squat")!;
     const curl = exercises.find((e) => e.name === "Barbell Curl")!;
 
-    await setPlanForDay(conn, "Monday", [squat.id]);
-    await setPlanForDay(conn, "Wednesday", [curl.id]);
+    await setPlanForDay(conn, "Monday", [entry(squat.id)]);
+    await setPlanForDay(conn, "Wednesday", [entry(curl.id)]);
 
     const plan = await getWeeklyPlan(conn);
     expect(plan["Monday"].map((e) => e.name)).toEqual(["Barbell Back Squat"]);
     expect(plan["Wednesday"].map((e) => e.name)).toEqual(["Barbell Curl"]);
+  });
+
+  it("clears a day's plan when given an empty entry list", async () => {
+    const exercises = await listGymExercises(conn);
+    const squat = exercises.find((e) => e.name === "Barbell Back Squat")!;
+
+    await setPlanForDay(conn, "Monday", [entry(squat.id)]);
+    await setPlanForDay(conn, "Monday", []);
+
+    const plan = await getWeeklyPlan(conn);
+    expect(plan["Monday"]).toBeUndefined();
   });
 });

@@ -11,6 +11,7 @@ export function SetEntryForm({
   sessionClientUuid,
   exercise,
   nextSetNumber,
+  target,
   onSwap,
   showNext,
   onNext,
@@ -18,6 +19,9 @@ export function SetEntryForm({
   sessionClientUuid: string;
   exercise: CachedExercise;
   nextSetNumber: number;
+  // Plan-derived target for this exercise, if any. Purely informational —
+  // never blocks logging past the target.
+  target?: { sets: number | null; reps: number | null };
   onSwap: () => void;
   showNext: boolean;
   onNext: () => void;
@@ -30,6 +34,7 @@ export function SetEntryForm({
   const [rpe, setRpe] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const lastPerformance = lastPerformanceByExercise[exercise.id];
+  const hasTargetPair = target != null && target.sets != null && target.reps != null;
 
   async function handleSubmit(formData: FormData) {
     const weightValue = Number(formData.get("weight"));
@@ -82,6 +87,12 @@ export function SetEntryForm({
           Swap
         </button>
       </div>
+      {hasTargetPair && (
+        <p className="mt-1 text-xs font-medium text-neutral-600 dark:text-neutral-300">
+          Target: {target!.sets} × {target!.reps}
+          {target!.sets != null ? ` · Set ${nextSetNumber} of ${target!.sets}` : ""}
+        </p>
+      )}
       {lastPerformance && (
         <p className="mt-1 text-xs text-neutral-500">
           Last time: {lastPerformance.sets.map((s) => `${toDisplay(s.weightKg).toFixed(1)}${unit} × ${s.reps}`).join(", ")}

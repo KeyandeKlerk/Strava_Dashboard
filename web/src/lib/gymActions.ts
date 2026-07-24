@@ -18,6 +18,8 @@ import {
   upsertGymSession,
   type GymExerciseRow,
   type GymSessionDetail,
+  type PlanEntryInput,
+  type PlanExerciseRow,
 } from "./db/gymMutations";
 import { exerciseProgression, type ExerciseProgressionRow } from "./gymMetrics";
 import { DASHBOARD_DATA_TAG } from "./pageData";
@@ -130,12 +132,12 @@ export async function createGymSessionForActivityAction(
   return { sessionId: session.id };
 }
 
-export async function getWeeklyPlanAction(): Promise<Record<string, GymExerciseRow[]>> {
+export async function getWeeklyPlanAction(): Promise<Record<string, PlanExerciseRow[]>> {
   const conn = await getConnection();
   return getWeeklyPlan(conn);
 }
 
-export async function setPlanForDayAction(dayOfWeek: string, exerciseIds: number[]): Promise<void> {
+export async function setPlanForDayAction(dayOfWeek: string, entries: PlanEntryInput[]): Promise<void> {
   const conn = await getConnection();
-  await setPlanForDay(conn, dayOfWeek, exerciseIds);
+  await setPlanForDay(conn, dayOfWeek, entries);
 }

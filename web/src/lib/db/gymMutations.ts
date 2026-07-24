@@ -345,7 +345,30 @@ export async function getLastPerformanceByExercise(
   return byExercise;
 }
 
-export async function getWeeklyPlan(conn: DuckDBConnection): Promise<Record<string, GymExerciseRow[]>> {
+// A plan row is a library/custom exercise plus the plan-specific target and
+// grouping fields. Kept separate from GymExerciseRow (which is used in
+// contexts with no notion of a plan, e.g. listGymExercises/addCustomExercise)
+// so those callers don't grow columns that only make sense inside a plan.
+// superset_group is carried through as a plain passthrough field here — the
+// grouping BEHAVIOUR (round-robin queueing, group/ungroup UI) lands in a later
+// task; this module just stores and returns whatever it's given.
+export interface PlanExerciseRow extends GymExerciseRow {
+  target_sets: number | null;
+  target_reps: number | null;
+  superset_group: number | null;
+}
+
+// Input shape for a single plan entry. exerciseId references an existing
+// gym_exercises row; the other fields default to null for a plain ordered
+// list with no targets/grouping.
+export interface PlanEntryInput {
+  exerciseId: number;
+  targetSets: number | null;
+  targetReps: number | null;
+  supersetGroup: number | null;
+}
+
+export async function getWeeklyPlan(conn: DuckDBConnection): Promise<Record<string, PlanExerciseRow[]>> {
   const rows = await queryRows<{
     day_of_week: string;
     id: number;
@@ -354,15 +377,19 @@ export async function getWeeklyPlan(conn: DuckDBConnection): Promise<Record<stri
     muscle_group: string;
     equipment: string | null;
     is_custom: boolean;
+    target_sets: number | null;
+    target_reps: number | null;
+    superset_group: number | null;
   }>(
     conn,
-    `SELECT gpe.day_of_week, ge.id, ge.client_uuid, ge.name, ge.muscle_group, ge.equipment, ge.is_custom
+    `SELECT gpe.day_of_week, ge.id, ge.client_uuid, ge.name, ge.muscle_group, ge.equipment, ge.is_custom,
+            gpe.target_sets, gpe.target_reps, gpe.superset_group
      FROM gym_plan_exercises gpe
      JOIN gym_exercises ge ON ge.id = gpe.exercise_id
      ORDER BY gpe.day_of_week, gpe.position`,
   );
 
-  const byDay: Record<string, GymExerciseRow[]> = {};
+  const byDay: Record<string, PlanExerciseRow[]> = {};
   for (const row of rows) {
     const list = byDay[row.day_of_week] ?? [];
     list.push({
@@ -372,6 +399,9 @@ export async function getWeeklyPlan(conn: DuckDBConnection): Promise<Record<stri
       muscle_group: row.muscle_group,
       equipment: row.equipment,
       is_custom: row.is_custom,
+      target_sets: row.target_sets,
+      target_reps: row.target_reps,
+      superset_group: row.superset_group,
     });
     byDay[row.day_of_week] = list;
   }
@@ -380,13 +410,27 @@ export async function getWeeklyPlan(conn: DuckDBConnection): Promise<Record<stri
 
 // Whole-list replace, not a diff — a day's plan is always edited as a complete
 // ordered list from the /gym/plan builder, so there's no partial-update case
-// to support.
-export async function setPlanForDay(conn: DuckDBConnection, dayOfWeek: string, exerciseIds: number[]): Promise<void> {
+// to support. Only the row shape being inserted grew (target/grouping columns);
+// the delete-then-reinsert-in-order behaviour is unchanged.
+export async function setPlanForDay(
+  conn: DuckDBConnection,
+  dayOfWeek: string,
+  entries: PlanEntryInput[],
+): Promise<void> {
   await conn.run("DELETE FROM gym_plan_exercises WHERE day_of_week = $day", { day: dayOfWeek });
-  for (let i = 0; i < exerciseIds.length; i++) {
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
     await conn.run(
-      `INSERT INTO gym_plan_exercises (day_of_week, exercise_id, position) VALUES ($day, $exercise_id, $position)`,
-      { day: dayOfWeek, exercise_id: exerciseIds[i], position: i },
+      `INSERT INTO gym_plan_exercises (day_of_week, exercise_id, position, target_sets, target_reps, superset_group)
+       VALUES ($day, $exercise_id, $position, $target_sets, $target_reps, $superset_group)`,
+      {
+        day: dayOfWeek,
+        exercise_id: e.exerciseId,
+        position: i,
+        target_sets: e.targetSets,
+        target_reps: e.targetReps,
+        superset_group: e.supersetGroup,
+      },
     );
   }
 }

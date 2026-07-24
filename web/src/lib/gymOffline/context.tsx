@@ -34,6 +34,7 @@ import {
   type CachedSession,
   type CachedSet,
 } from "./db";
+import type { PlanEntryInput } from "@/lib/db/gymMutations";
 import { flushQueue, type FlushResult } from "./queue";
 
 function newUuid(): string {
@@ -61,7 +62,7 @@ interface GymOfflineContextValue {
   sessions: CachedSession[];
   sets: CachedSet[];
   recentSessions: CachedRecentSession[];
-  planByDay: Record<string, number[]>;
+  planByDay: Record<string, PlanEntryInput[]>;
   lastPerformanceByExercise: Record<number, { sessionDate: string; sets: CachedLastPerformanceSet[] }>;
   pendingCount: number;
   isOnline: boolean;
@@ -89,7 +90,7 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<CachedSession[]>([]);
   const [sets, setSets] = useState<CachedSet[]>([]);
   const [recentSessions, setRecentSessions] = useState<CachedRecentSession[]>([]);
-  const [planByDay, setPlanByDay] = useState<Record<string, number[]>>({});
+  const [planByDay, setPlanByDay] = useState<Record<string, PlanEntryInput[]>>({});
   const [lastPerformanceByExercise, setLastPerformanceByExercise] = useState<
     Record<number, { sessionDate: string; sets: CachedLastPerformanceSet[] }>
   >({});
@@ -115,7 +116,7 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
     setSets(setRows);
     setRecentSessions(recentRows);
     setPendingCount(pending.length);
-    setPlanByDay(Object.fromEntries(planRows.map((p) => [p.dayOfWeek, p.exerciseIds])));
+    setPlanByDay(Object.fromEntries(planRows.map((p) => [p.dayOfWeek, p.entries])));
     setLastPerformanceByExercise(
       Object.fromEntries(lastPerformanceRows.map((p) => [p.exerciseId, { sessionDate: p.sessionDate, sets: p.sets }])),
     );
@@ -141,7 +142,7 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
       const body = (await res.json()) as {
         exercises: CachedExercise[];
         recentSessions: CachedRecentSession[];
-        planByDay: Record<string, number[]>;
+        planByDay: Record<string, PlanEntryInput[]>;
         lastPerformanceByExercise: Record<string, { sessionDate: string; sets: CachedLastPerformanceSet[] }>;
       };
       const db = await getGymOfflineDb();
@@ -154,7 +155,7 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
       await replaceRecentSessionsCache(db, body.recentSessions);
       await replacePlanCache(
         db,
-        Object.entries(body.planByDay).map(([dayOfWeek, exerciseIds]) => ({ dayOfWeek, exerciseIds })),
+        Object.entries(body.planByDay).map(([dayOfWeek, entries]) => ({ dayOfWeek, entries })),
       );
       await replaceLastPerformanceCache(
         db,

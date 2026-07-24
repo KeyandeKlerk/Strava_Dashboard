@@ -4,6 +4,7 @@
 // addGymSet resolves session_id server-side by session_client_uuid to match
 // (see web/src/lib/db/gymMutations.ts's header comment).
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import type { PlanEntryInput } from "@/lib/db/gymMutations";
 
 export type PendingMutationType = "create_exercise" | "create_session" | "create_set" | "delete_set";
 
@@ -60,7 +61,7 @@ export interface CachedRecentSession {
 
 export interface CachedPlanDay {
   dayOfWeek: string; // full weekday name, e.g. "Monday"
-  exerciseIds: number[]; // in position order
+  entries: PlanEntryInput[]; // in position order; each carries its exerciseId + target/grouping fields
 }
 
 export interface CachedLastPerformanceSet {
