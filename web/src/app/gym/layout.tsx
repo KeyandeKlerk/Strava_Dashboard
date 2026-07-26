@@ -19,7 +19,7 @@ export default function GymLayout({ children }: { children: React.ReactNode }) {
           <div style={{ viewTransitionName: "site-header" }}>
             <GymStatusHeader />
           </div>
-          <ViewTransition name="tab-content" share="tab-crossfade" enter="auto" default="none">
+          <ViewTransition name="tab-content" share="tab-crossfade" enter="suspense-reveal" default="none">
             {children}
           </ViewTransition>
         </GymOfflineProvider>

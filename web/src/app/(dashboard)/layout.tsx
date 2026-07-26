@@ -39,7 +39,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <SyncButton />
       </div>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-24 pt-2">
-        <ViewTransition name="tab-content" share="tab-crossfade" enter="auto" default="none">
+        <ViewTransition name="tab-content" share="tab-crossfade" enter="suspense-reveal" default="none">
           {children}
         </ViewTransition>
       </main>
