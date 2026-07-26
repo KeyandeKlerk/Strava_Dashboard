@@ -17,6 +17,7 @@ export function BottomNav() {
 
   return (
     <nav
+      style={{ viewTransitionName: "bottom-nav" }}
       className="fixed inset-x-0 bottom-0 z-10 border-t border-neutral-200 bg-white/95 backdrop-blur
                  pb-[env(safe-area-inset-bottom)] dark:border-neutral-800 dark:bg-neutral-950/95"
       aria-label="Primary"

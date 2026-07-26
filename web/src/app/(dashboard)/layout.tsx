@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, ViewTransition } from "react";
 import { connection } from "next/server";
 import { BottomNav } from "@/components/BottomNav";
 import { SyncButton } from "@/components/SyncButton";
@@ -28,14 +28,21 @@ async function LastSyncedLabel() {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col pt-[env(safe-area-inset-top)]">
-      <div className="mx-auto flex w-full max-w-3xl items-center justify-end gap-2 px-4 pt-2 text-right text-xs text-neutral-400">
+      <div
+        style={{ viewTransitionName: "site-header" }}
+        className="mx-auto flex w-full max-w-3xl items-center justify-end gap-2 px-4 pt-2 text-right text-xs text-neutral-400"
+      >
         <Suspense fallback={<span>Checking sync status…</span>}>
           <LastSyncedLabel />
         </Suspense>
         <span aria-hidden="true">·</span>
         <SyncButton />
       </div>
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-24 pt-2">{children}</main>
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-24 pt-2">
+        <ViewTransition name="tab-content" share="tab-crossfade" enter="auto" default="none">
+          {children}
+        </ViewTransition>
+      </main>
       <BottomNav />
     </div>
   );

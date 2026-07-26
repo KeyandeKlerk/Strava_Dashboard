@@ -1,3 +1,4 @@
+import { ViewTransition } from "react";
 import { BottomNav } from "@/components/BottomNav";
 import { GymOfflineProvider } from "@/lib/gymOffline/context";
 import { GymStatusHeader } from "@/components/gym/GymStatusHeader";
@@ -15,8 +16,12 @@ export default function GymLayout({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-dvh flex-col pt-[env(safe-area-inset-top)]">
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-24 pt-4">
         <GymOfflineProvider>
-          <GymStatusHeader />
-          {children}
+          <div style={{ viewTransitionName: "site-header" }}>
+            <GymStatusHeader />
+          </div>
+          <ViewTransition name="tab-content" share="tab-crossfade" enter="auto" default="none">
+            {children}
+          </ViewTransition>
         </GymOfflineProvider>
       </main>
       <BottomNav />
