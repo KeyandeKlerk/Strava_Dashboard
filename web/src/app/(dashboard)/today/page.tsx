@@ -5,8 +5,6 @@ import { StatCard } from "@/components/StatCard";
 import { ReadinessBanner } from "@/components/ReadinessBanner";
 import { TaperChecklist } from "@/components/TaperChecklist";
 
-export const runtime = "nodejs";
-
 export default async function TodayPage() {
   const {
     weekSummary,

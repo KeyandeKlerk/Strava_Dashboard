@@ -2,8 +2,8 @@ import { DuckDBConnection, DuckDBInstance } from "@duckdb/node-api";
 import { initSchema } from "./schema";
 
 // This module touches native bindings and must only run on the Node.js
-// runtime (not Edge) — every route/component importing it needs
-// `export const runtime = "nodejs"`.
+// runtime (not Edge). Under Cache Components, Node.js is the unconditional
+// default runtime, so no route segment config is needed (or permitted).
 
 let instancePromise: Promise<DuckDBInstance> | null = null;
 

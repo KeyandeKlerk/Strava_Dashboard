@@ -11,8 +11,6 @@ import {
   type PlanEntryInput,
 } from "@/lib/db/gymMutations";
 
-export const runtime = "nodejs";
-
 export async function GET() {
   const conn = await getConnection();
   const [exercises, recentSessions, plan, lastPerformance] = await Promise.all([

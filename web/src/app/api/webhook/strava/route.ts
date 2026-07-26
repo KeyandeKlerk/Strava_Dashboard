@@ -7,8 +7,6 @@ import { getConnection } from "@/lib/db/client";
 import { runSync } from "@/lib/strava/sync";
 import { TRAINING_DATA_TAG } from "@/lib/pageData";
 
-export const runtime = "nodejs";
-
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const verifyToken = searchParams.get("hub.verify_token");

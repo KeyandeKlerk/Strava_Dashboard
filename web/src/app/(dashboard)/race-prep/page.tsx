@@ -5,8 +5,6 @@ import { ChartCard } from "@/components/charts/ChartCard";
 import { ElevationProfileChart, WeeklyElevationChart } from "@/components/charts/RaceCharts";
 import { addRaceEvent } from "./actions";
 
-export const runtime = "nodejs";
-
 function fmtDuration(totalMin: number): string {
   const totalSec = Math.round(totalMin * 60);
   const h = Math.floor(totalSec / 3600);

@@ -3,8 +3,6 @@ import { getBodyWeightPageData } from "@/lib/pageData";
 import { todayIso } from "@/lib/shared";
 import { BodyWeightPage } from "@/components/gym/BodyWeightPage";
 
-export const runtime = "nodejs";
-
 export default async function GymBodyWeightPage() {
   const { logs, chartData } = await getBodyWeightPageData();
   const today = todayIso();

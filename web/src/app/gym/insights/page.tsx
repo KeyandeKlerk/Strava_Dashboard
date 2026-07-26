@@ -5,8 +5,6 @@ import { ChartCard } from "@/components/charts/ChartCard";
 import { MuscleGroupVolumeChart, SessionsPerWeekChart, VolumeByWeekChart } from "@/components/charts/GymCharts";
 import { ExerciseProgressionSection } from "@/components/gym/ExerciseProgressionSection";
 
-export const runtime = "nodejs";
-
 export default async function GymInsightsPage() {
   const { weeklyVolume, muscleGroups, muscleVolumePivoted, sessionsPerWeek, records, muscleFrequency, exercises, defaultExerciseId, defaultProgression } =
     await getGymInsightsPageData();

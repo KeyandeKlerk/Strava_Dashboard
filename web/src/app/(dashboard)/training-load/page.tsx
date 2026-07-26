@@ -10,8 +10,6 @@ import {
   WeeklyDistanceChart,
 } from "@/components/charts/TrainingLoadCharts";
 
-export const runtime = "nodejs";
-
 export default async function TrainingLoadPage() {
   const { volume, distanceData, timeData, longRunData, monthlySorted, categorySorted, goalRaceDistanceKm } =
     await getTrainingLoadPageData();

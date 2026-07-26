@@ -2,8 +2,6 @@ import Link from "next/link";
 import { getWeeklyPlanAction, listGymExercisesAction } from "@/lib/gymActions";
 import { PlanBuilder } from "@/components/gym/PlanBuilder";
 
-export const runtime = "nodejs";
-
 export default async function GymPlanPage() {
   const [plan, exercises] = await Promise.all([getWeeklyPlanAction(), listGymExercisesAction()]);
 

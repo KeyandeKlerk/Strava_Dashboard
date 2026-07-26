@@ -4,8 +4,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getConnection } from "@/lib/db/client";
 import { addCustomExercise } from "@/lib/db/gymMutations";
 
-export const runtime = "nodejs";
-
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const { client_uuid, name, muscle_group, equipment } = body ?? {};

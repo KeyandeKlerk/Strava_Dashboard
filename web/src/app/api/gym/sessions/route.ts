@@ -5,8 +5,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getConnection } from "@/lib/db/client";
 import { upsertGymSession } from "@/lib/db/gymMutations";
 
-export const runtime = "nodejs";
-
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const { client_uuid, session_date, started_at, ended_at, activity_id, notes } = body ?? {};

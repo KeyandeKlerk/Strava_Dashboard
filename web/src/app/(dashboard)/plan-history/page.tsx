@@ -5,8 +5,6 @@ import { WeekExplorer } from "@/components/WeekExplorer";
 import { ShowMoreTable } from "@/components/ShowMoreTable";
 import { StatCard } from "@/components/StatCard";
 
-export const runtime = "nodejs";
-
 export default async function PlanHistoryPage() {
   const { longRuns, recent, weekSummary, dailyByWeek, defaultWeek, today } = await getPlanHistoryPageData();
 

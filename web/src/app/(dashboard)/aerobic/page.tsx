@@ -23,8 +23,6 @@ const DECOUPLING_LEGEND = [
   { color: SEMANTIC_COLOR.bad, label: "Drifting (≥5%)" },
 ];
 
-export const runtime = "nodejs";
-
 export default async function AerobicPage() {
   const { zoneSorted, withEasyPct, latestEasyPct, paceTrend, qualityScores } = await getAerobicPageData();
 

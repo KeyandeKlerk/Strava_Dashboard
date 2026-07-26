@@ -11,8 +11,6 @@ import {
   TsbChart,
 } from "@/components/charts/FatigueCharts";
 
-export const runtime = "nodejs";
-
 // Same plain-Tailwind-conditional-class convention as ReadinessBanner —
 // green/amber/red/gray, not the SVG-chart CSS var palette.
 const TRAINING_STATUS_STYLE: Record<TrainingStatus, string> = {
