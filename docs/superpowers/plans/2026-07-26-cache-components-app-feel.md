@@ -292,6 +292,7 @@ cd web && git add src/lib/pageData.ts && git commit -m "feat: migrate pageData.t
 - Modify: `web/src/app/(dashboard)/race-prep/actions.ts`
 - Modify: `web/src/lib/syncActions.ts`
 - Modify: `web/src/app/api/webhook/strava/route.ts`
+- Modify: `web/src/lib/workoutActions.ts` (added post-hoc — missed in the original file list; `logNiggleAction` invalidates the tag `getFatiguePageData`'s `recentNiggleLogs` reads, which is training-domain data)
 
 **Interfaces:**
 - Consumes: `TRAINING_DATA_TAG` from `@/lib/pageData` (Task 2).
@@ -453,6 +454,32 @@ import { TRAINING_DATA_TAG } from "@/lib/pageData";
         // than the default `'max'` stale-while-revalidate profile, which
         // would serve one more stale page load before refreshing.
         revalidateTag(TRAINING_DATA_TAG, { expire: 0 });
+```
+
+- [ ] **Step 6b: `src/lib/workoutActions.ts`**
+
+Old:
+
+```ts
+import { DASHBOARD_DATA_TAG } from "./pageData";
+```
+```ts
+  // Fatigue page's recent-niggles summary reads cached page data, unlike
+  // this sheet's own fetch (re-invoked directly by the client on success).
+  updateTag(DASHBOARD_DATA_TAG);
+  return {};
+```
+
+New:
+
+```ts
+import { TRAINING_DATA_TAG } from "./pageData";
+```
+```ts
+  // Fatigue page's recent-niggles summary reads cached page data, unlike
+  // this sheet's own fetch (re-invoked directly by the client on success).
+  updateTag(TRAINING_DATA_TAG);
+  return {};
 ```
 
 - [ ] **Step 7: Typecheck**

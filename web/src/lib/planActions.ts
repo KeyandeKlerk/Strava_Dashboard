@@ -9,14 +9,14 @@ import {
   syncWeeklyFromDaily,
   type DailySessionInput,
 } from "./db/mutations";
-import { DASHBOARD_DATA_TAG } from "./pageData";
+import { TRAINING_DATA_TAG } from "./pageData";
 
 export interface PlanActionState {
   error?: string;
 }
 
 function revalidatePlanPages(): void {
-  updateTag(DASHBOARD_DATA_TAG);
+  updateTag(TRAINING_DATA_TAG);
   revalidatePath("/today");
   revalidatePath("/plan-history");
 }

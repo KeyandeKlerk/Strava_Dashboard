@@ -11,7 +11,7 @@ import {
   type NiggleLogRow,
   type NutritionLogRow,
 } from "./metrics";
-import { DASHBOARD_DATA_TAG } from "./pageData";
+import { TRAINING_DATA_TAG } from "./pageData";
 
 export interface WorkoutDetail {
   activity: ActivityDetailRow;
@@ -59,6 +59,6 @@ export async function logNiggleAction(activityId: number, formData: FormData): P
 
   // Fatigue page's recent-niggles summary reads cached page data, unlike
   // this sheet's own fetch (re-invoked directly by the client on success).
-  updateTag(DASHBOARD_DATA_TAG);
+  updateTag(TRAINING_DATA_TAG);
   return {};
 }

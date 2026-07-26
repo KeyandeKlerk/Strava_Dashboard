@@ -2,14 +2,14 @@
 import { revalidatePath, updateTag } from "next/cache";
 import { getConnection, queryRow } from "@/lib/db/client";
 import { addNutritionLog, upsertNutritionTargets } from "@/lib/db/mutations";
-import { DASHBOARD_DATA_TAG } from "@/lib/pageData";
+import { TRAINING_DATA_TAG } from "@/lib/pageData";
 
 export interface NutritionActionState {
   error?: string;
 }
 
 function revalidateNutrition(): void {
-  updateTag(DASHBOARD_DATA_TAG);
+  updateTag(TRAINING_DATA_TAG);
   revalidatePath("/today");
 }
 

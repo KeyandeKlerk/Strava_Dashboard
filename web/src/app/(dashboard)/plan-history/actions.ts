@@ -8,7 +8,7 @@ import {
   syncWeeklyFromDaily,
 } from "@/lib/db/mutations";
 import { parseCsv } from "@/lib/csv";
-import { DASHBOARD_DATA_TAG } from "@/lib/pageData";
+import { TRAINING_DATA_TAG } from "@/lib/pageData";
 
 const REQUIRED_COLUMNS = [
   "planned_date",
@@ -55,7 +55,7 @@ export async function importPlanCsv(_prev: ImportPlanState, formData: FormData):
   await syncWeeklyFromDaily(conn);
   await correlateActivitiesToPlan(conn);
 
-  updateTag(DASHBOARD_DATA_TAG);
+  updateTag(TRAINING_DATA_TAG);
   revalidatePath("/plan-history");
   revalidatePath("/today");
   return { success: `Replaced plan with ${rows.length} sessions and matched to Strava activities.` };
