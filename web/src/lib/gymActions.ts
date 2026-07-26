@@ -3,7 +3,7 @@
 // web/src/app/api/gym/*) — these are reached from WorkoutDetailSheet/
 // GymSessionDetailSheet for viewing/backfilling history, not live-logging at
 // the gym, so they don't need offline queuing.
-import { updateTag } from "next/cache";
+import { cacheTag, updateTag } from "next/cache";
 import { getConnection, queryRow } from "./db/client";
 import {
   addCustomExercise,
@@ -28,14 +28,18 @@ import {
   type BodyWeightLogRow,
 } from "./db/bodyWeightMutations";
 import { exerciseProgression, type ExerciseProgressionRow } from "./gymMetrics";
-import { DASHBOARD_DATA_TAG } from "./pageData";
+import { GYM_DATA_TAG, BODYWEIGHT_DATA_TAG } from "./pageData";
 
 export async function getGymSessionDetailAction(sessionId: number): Promise<GymSessionDetail | null> {
+  "use cache";
+  cacheTag(GYM_DATA_TAG);
   const conn = await getConnection();
   return getGymSessionDetail(conn, sessionId);
 }
 
 export async function listGymExercisesAction(): Promise<GymExerciseRow[]> {
+  "use cache";
+  cacheTag(GYM_DATA_TAG);
   const conn = await getConnection();
   return listGymExercises(conn);
 }
@@ -43,6 +47,8 @@ export async function listGymExercisesAction(): Promise<GymExerciseRow[]> {
 // Backs the /gym/insights exercise-progression select for any exercise not
 // already preloaded in getGymInsightsPageData's default.
 export async function getExerciseProgressionAction(exerciseId: number): Promise<ExerciseProgressionRow[]> {
+  "use cache";
+  cacheTag(GYM_DATA_TAG);
   const conn = await getConnection();
   return exerciseProgression(conn, exerciseId);
 }
@@ -75,26 +81,26 @@ export async function logGymSetAction(sessionId: number, formData: FormData): Pr
   });
   if ("error" in result) return { error: result.error };
 
-  updateTag(DASHBOARD_DATA_TAG);
+  updateTag(GYM_DATA_TAG);
   return {};
 }
 
 export async function deleteGymSetAction(clientUuid: string): Promise<void> {
   const conn = await getConnection();
   await deleteGymSet(conn, clientUuid);
-  updateTag(DASHBOARD_DATA_TAG);
+  updateTag(GYM_DATA_TAG);
 }
 
 export async function deleteGymSessionAction(clientUuid: string): Promise<void> {
   const conn = await getConnection();
   await deleteGymSession(conn, clientUuid);
-  updateTag(DASHBOARD_DATA_TAG);
+  updateTag(GYM_DATA_TAG);
 }
 
 export async function updateGymSessionNotesAction(clientUuid: string, notes: string | null): Promise<void> {
   const conn = await getConnection();
   await updateGymSessionNotes(conn, clientUuid, notes);
-  updateTag(DASHBOARD_DATA_TAG);
+  updateTag(GYM_DATA_TAG);
 }
 
 export async function addCustomExerciseAction(formData: FormData): Promise<GymActionState & { exercise?: GymExerciseRow }> {
@@ -134,11 +140,13 @@ export async function createGymSessionForActivityAction(
     session_date: activity.session_date,
     activity_id: activityId,
   });
-  updateTag(DASHBOARD_DATA_TAG);
+  updateTag(GYM_DATA_TAG);
   return { sessionId: session.id };
 }
 
 export async function getWeeklyPlanAction(): Promise<Record<string, PlanExerciseRow[]>> {
+  "use cache";
+  cacheTag(GYM_DATA_TAG);
   const conn = await getConnection();
   return getWeeklyPlan(conn);
 }
@@ -146,6 +154,7 @@ export async function getWeeklyPlanAction(): Promise<Record<string, PlanExercise
 export async function setPlanForDayAction(dayOfWeek: string, entries: PlanEntryInput[]): Promise<void> {
   const conn = await getConnection();
   await setPlanForDay(conn, dayOfWeek, entries);
+  updateTag(GYM_DATA_TAG);
 }
 
 // Weight arrives already converted to kg — BodyWeightPage's form converts via
@@ -166,11 +175,13 @@ export async function logBodyWeightAction(formData: FormData): Promise<GymAction
     weight_kg: weightKg,
   });
 
-  updateTag(DASHBOARD_DATA_TAG);
+  updateTag(BODYWEIGHT_DATA_TAG);
   return {};
 }
 
 export async function listBodyWeightLogsAction(): Promise<BodyWeightLogRow[]> {
+  "use cache";
+  cacheTag(BODYWEIGHT_DATA_TAG);
   const conn = await getConnection();
   return listBodyWeightLogs(conn);
 }
@@ -178,5 +189,5 @@ export async function listBodyWeightLogsAction(): Promise<BodyWeightLogRow[]> {
 export async function deleteBodyWeightLogAction(clientUuid: string): Promise<void> {
   const conn = await getConnection();
   await deleteBodyWeightLog(conn, clientUuid);
-  updateTag(DASHBOARD_DATA_TAG);
+  updateTag(BODYWEIGHT_DATA_TAG);
 }
