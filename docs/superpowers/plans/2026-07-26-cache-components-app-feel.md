@@ -1061,6 +1061,418 @@ cd web && git add "src/app/(dashboard)/loading.tsx" src/app/gym/plan/loading.tsx
 
 ---
 
+## Task 7b: Remove `export const runtime = "nodejs"` everywhere (Cache Components incompatibility)
+
+**Discovered during Task 8's dev-server verification, not anticipated by the original spec.** With `cacheComponents: true` enabled, Next.js 16 rejects the `runtime` route segment config outright — on ANY value, not just `"edge"` — with a hard build/runtime error: `Route segment config "runtime" is not compatible with nextConfig.cacheComponents. Please remove it.` This affects every page and Route Handler in the app that declares `export const runtime = "nodejs";`, which is all of them (the app requires Node.js for native DuckDB bindings) — so every single route 500'd once Task 1's config landed and none of the subsequent tasks removed this now-incompatible declaration (it wasn't in scope for any of Tasks 1-7 as written). Node.js is simply the unconditional default runtime under Cache Components (there is no edge option), so the fix is to delete the line outright, not replace it with anything.
+
+**Files:**
+- Modify (delete the `export const runtime = "nodejs";` line and the blank line immediately after it, leaving surrounding code otherwise untouched):
+  - `web/src/app/(dashboard)/today/page.tsx`
+  - `web/src/app/(dashboard)/fatigue/page.tsx`
+  - `web/src/app/(dashboard)/aerobic/page.tsx`
+  - `web/src/app/(dashboard)/training-load/page.tsx`
+  - `web/src/app/(dashboard)/plan-history/page.tsx`
+  - `web/src/app/(dashboard)/race-prep/page.tsx`
+  - `web/src/app/gym/plan/page.tsx`
+  - `web/src/app/gym/insights/page.tsx`
+  - `web/src/app/gym/bodyweight/page.tsx`
+  - `web/src/app/api/gym/bootstrap/route.ts`
+  - `web/src/app/api/gym/sessions/route.ts`
+  - `web/src/app/api/webhook/strava/route.ts`
+  - `web/src/app/api/gym/exercises/route.ts`
+  - `web/src/app/api/gym/sets/[clientUuid]/route.ts`
+  - `web/src/app/api/gym/sets/route.ts`
+
+**Interfaces:** no exports change in any of these 15 files — purely deletes one now-invalid line (plus its trailing blank line) per file.
+
+- [ ] **Step 1: Delete the line in all 15 files**
+
+Every occurrence is a bare two-line block with no attached comment (verified directly in each file):
+
+```ts
+export const runtime = "nodejs";
+
+```
+
+Delete both the `export const runtime = "nodejs";` line and the blank line that immediately follows it in each of the 15 files, leaving the surrounding imports/code otherwise untouched.
+
+- [ ] **Step 2: Typecheck**
+
+Run: `cd web && npx tsc --noEmit`
+
+Expected: no errors.
+
+- [ ] **Step 3: Start the dev server and confirm every route returns 200, not 500**
+
+```bash
+cd web
+pkill -f "next dev" 2>/dev/null; sleep 1
+(SESSION_SECRET="local-smoke-test-secret" SITE_PASSWORD="localtest" nohup npm run dev > /tmp/nextdev-taskfix.log 2>&1 & echo $! > /tmp/nextdev-taskfix.pid)
+sleep 5 && tail -20 /tmp/nextdev-taskfix.log
+TOKEN=$(node -e '
+const crypto = require("crypto");
+console.log(crypto.createHmac("sha256", "local-smoke-test-secret").update("authenticated").digest("hex"));
+')
+COOKIE="session=$TOKEN"
+for p in today fatigue training-load aerobic plan-history race-prep gym/plan gym/insights gym/bodyweight; do
+  curl -s -o /dev/null -w "/$p -> %{http_code}\n" -H "Cookie: $COOKIE" "http://localhost:3000/$p"
+done
+pkill -f "next dev"
+```
+
+Expected: every route returns `200`, not `500`. No "not compatible with `nextConfig.cacheComponents`" errors in the log.
+
+Run: `grep -rn "export const runtime" web/src` — expected: zero matches anywhere (this route segment config is fully retired under Cache Components).
+
+- [ ] **Step 4: Run the full test suite**
+
+Run: `cd web && npm test`
+
+Expected: same 222 tests passing (no test exercises route segment configs directly).
+
+- [ ] **Step 5: Commit**
+
+```bash
+cd web && git add -A && git commit -m "fix: remove runtime segment config, incompatible with Cache Components"
+```
+
+---
+
+## Task 7c: Fix `new Date()`/`Date.now()` prerender errors on Fatigue and Body Weight pages
+
+**Discovered during Task 7b's dev-server verification.** With `export const runtime = "nodejs"` removed (Task 7b) and `force-dynamic` removed (Tasks 5/6), Next now attempts to prerender a static shell for every page — including `FatiguePage` and `GymBodyWeightPage`, which both call `todayIso()` (`web/src/lib/shared.ts:82`, `return new Date().toISOString().slice(0, 10);`) directly in the component body, before any request-data access. This trips Next's dynamicIO validation: `Route "/fatigue" used new Date() before accessing either uncached data... or Request data...`. The HTTP response still returns 200 in dev (the error surfaces from a background prerender pass, not the actual dynamic render), but this would very likely fail at `next build` time, when Next actually needs to produce a static shell.
+
+Note: `todayIso()` is *also* called in 4 places inside `web/src/lib/pageData.ts` (inside `getTodayPageData`, `getFatiguePageData`, `getRacePrepPageData`, `getPlanHistoryPageData`) — those call sites are inside `'use cache'` functions and are unaffected/out of scope here: the "computed once, reused until the next tag invalidation" behavior for those is pre-existing (unchanged from when they were `unstable_cache`-wrapped before this migration), not a new bug.
+
+`fatigue/page.tsx` also has a second, closely related direct call: `fourWeeksAgoMs()` (line 30-32) calls `Date.now()` directly, with a comment claiming this route is `force-dynamic` (no longer true after Task 5). This call sits *after* `todayIso()` in the render body, so it wasn't independently flagged by Task 7b's dev-server run (Next's dynamicIO check reports the first violation; a component-wide fix that satisfies the requirement before `todayIso()` also covers this later call, since dynamicIO's rule is "no current-time access *before* request data is accessed," not "no current-time access at all").
+
+**Fix:** these two pages compute a "today" value throughout render (`FatiguePage` uses it across ACWR/monotony calculations feeding several `StatCard`s; `GymBodyWeightPage` passes it straight through as a prop) — narrowly Suspense-isolating just the date computation the way Task 5 did for the "last synced" label would require extracting most of each page's body into a child component, disproportionate to the problem. The correct minimal fix is to call Next's `connection()` API as the first statement in each page's async function body, before any other work — this marks the *entire* page as genuinely per-request dynamic (same freshness guarantee these two pages had under their old `force-dynamic` config), while their data-fetching (`getFatiguePageData()`, `getBodyWeightPageData()`) keeps the speed benefit of being `'use cache'`-tagged (fast on a cache hit; only the shell-prefetch benefit is intentionally not gained for these 2 of 9 tabs). This is a deliberate, bounded tradeoff, not an oversight — call it out as such rather than silently prerendering the whole page.
+
+**Files:**
+- Modify: `web/src/app/(dashboard)/fatigue/page.tsx`
+- Modify: `web/src/app/gym/bodyweight/page.tsx`
+
+**Interfaces:** no exports change — both pages' default export signatures are unchanged.
+
+- [ ] **Step 1: `fatigue/page.tsx`**
+
+Old (top of file):
+
+```tsx
+import { getFatiguePageData } from "@/lib/pageData";
+import { firstNonNull, flag, latestCompleteDay, todayIso, type TrainingStatus } from "@/lib/shared";
+import { StatCard } from "@/components/StatCard";
+import { ChartCard } from "@/components/charts/ChartCard";
+import {
+  AcwrChart,
+  EfficiencyFactorChart,
+  MonotonyChart,
+  RampRateChart,
+  StrainChart,
+  TsbChart,
+} from "@/components/charts/FatigueCharts";
+```
+...
+```tsx
+// Isolated from the component body: this is a per-request Server Component
+// (force-dynamic), so wall-clock time here is intentional, not a purity bug —
+// factoring it out just satisfies the linter's static "no Date.now() in
+// render" check, which can't see that this route never gets prerendered.
+function fourWeeksAgoMs(): number {
+  return Date.now() - 28 * 86400000;
+}
+
+export default async function FatiguePage() {
+  const { tsb, ef, acwr, ramp, mono, longPct, b2b, paceTrend, niggles, vo2max, trainingStatus } = await getFatiguePageData();
+```
+
+New:
+
+```tsx
+import { connection } from "next/server";
+import { getFatiguePageData } from "@/lib/pageData";
+import { firstNonNull, flag, latestCompleteDay, todayIso, type TrainingStatus } from "@/lib/shared";
+import { StatCard } from "@/components/StatCard";
+import { ChartCard } from "@/components/charts/ChartCard";
+import {
+  AcwrChart,
+  EfficiencyFactorChart,
+  MonotonyChart,
+  RampRateChart,
+  StrainChart,
+  TsbChart,
+} from "@/components/charts/FatigueCharts";
+```
+...
+```tsx
+// Wall-clock time (todayIso/fourWeeksAgoMs below) needs this whole page to
+// be genuinely per-request — connection() marks it as such under Cache
+// Components, trading this page's static-shell prefetch for correctness
+// (the alternative, force-dynamic, no longer exists as a concept).
+function fourWeeksAgoMs(): number {
+  return Date.now() - 28 * 86400000;
+}
+
+export default async function FatiguePage() {
+  await connection();
+  const { tsb, ef, acwr, ramp, mono, longPct, b2b, paceTrend, niggles, vo2max, trainingStatus } = await getFatiguePageData();
+```
+
+- [ ] **Step 2: `gym/bodyweight/page.tsx`**
+
+Old (full file):
+
+```tsx
+import Link from "next/link";
+import { getBodyWeightPageData } from "@/lib/pageData";
+import { todayIso } from "@/lib/shared";
+import { BodyWeightPage } from "@/components/gym/BodyWeightPage";
+
+export default async function GymBodyWeightPage() {
+  const { logs, chartData } = await getBodyWeightPageData();
+  const today = todayIso();
+
+  return (
+    <div>
+      <Link href="/gym" className="text-xs text-neutral-500 underline">
+        ← Gym
+      </Link>
+      <h1 className="mt-1 text-lg font-semibold">Body Weight</h1>
+      <p className="mt-1 text-sm text-neutral-500">Log your body weight and track it over time.</p>
+      <div className="mt-4">
+        <BodyWeightPage initialLogs={logs} initialChartData={chartData} today={today} />
+      </div>
+    </div>
+  );
+}
+```
+
+New (full file):
+
+```tsx
+import Link from "next/link";
+import { connection } from "next/server";
+import { getBodyWeightPageData } from "@/lib/pageData";
+import { todayIso } from "@/lib/shared";
+import { BodyWeightPage } from "@/components/gym/BodyWeightPage";
+
+export default async function GymBodyWeightPage() {
+  await connection();
+  const { logs, chartData } = await getBodyWeightPageData();
+  const today = todayIso();
+
+  return (
+    <div>
+      <Link href="/gym" className="text-xs text-neutral-500 underline">
+        ← Gym
+      </Link>
+      <h1 className="mt-1 text-lg font-semibold">Body Weight</h1>
+      <p className="mt-1 text-sm text-neutral-500">Log your body weight and track it over time.</p>
+      <div className="mt-4">
+        <BodyWeightPage initialLogs={logs} initialChartData={chartData} today={today} />
+      </div>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 3: Typecheck**
+
+Run: `cd web && npx tsc --noEmit`
+
+Expected: no errors.
+
+- [ ] **Step 4: Verify the dynamicIO error is gone and a production build succeeds**
+
+```bash
+cd web
+pkill -f "next dev" 2>/dev/null; sleep 1
+(SESSION_SECRET="local-smoke-test-secret" SITE_PASSWORD="localtest" nohup npm run dev > /tmp/nextdev-7c.log 2>&1 & echo $! > /tmp/nextdev-7c.pid)
+sleep 5
+TOKEN=$(node -e '
+const crypto = require("crypto");
+console.log(crypto.createHmac("sha256", "local-smoke-test-secret").update("authenticated").digest("hex"));
+')
+COOKIE="session=$TOKEN"
+curl -s -o /dev/null -w "/fatigue -> %{http_code}\n" -H "Cookie: $COOKIE" "http://localhost:3000/fatigue"
+curl -s -o /dev/null -w "/gym/bodyweight -> %{http_code}\n" -H "Cookie: $COOKIE" "http://localhost:3000/gym/bodyweight"
+grep -i "new Date()\|not compatible" /tmp/nextdev-7c.log || echo "no dynamicIO/cacheComponents errors found"
+pkill -f "next dev"
+```
+
+Expected: both routes return 200, and the grep finds nothing (the "no dynamicIO/cacheComponents errors found" fallback prints).
+
+Then run a real production build, since this class of error is a build-time concern first and foremost:
+
+```bash
+cd web && npm run build
+```
+
+Expected: build succeeds. If it fails with a similar current-time/dynamic-access error on a *different* page than these two, that indicates another call site this task's scope didn't anticipate — stop and report it rather than guessing at a fix.
+
+- [ ] **Step 5: Run the full test suite**
+
+Run: `cd web && npm test`
+
+Expected: same 222 tests passing.
+
+- [ ] **Step 6: Commit**
+
+```bash
+cd web && git add "src/app/(dashboard)/fatigue/page.tsx" src/app/gym/bodyweight/page.tsx && git commit -m "fix: mark Fatigue and Body Weight pages as per-request dynamic via connection()"
+```
+
+---
+
+## Task 7d: Wrap `/login`'s `searchParams` read in `<Suspense>` (blocking-route build failure)
+
+**Discovered during Task 7c's production-build verification.** `npm run build` fails on `/login`:
+
+```
+Error: Route "/login": Uncached data was accessed outside of <Suspense>. This delays the
+entire page from rendering, resulting in a slow user experience.
+```
+
+`web/src/app/login/page.tsx` reads `searchParams` (a `Promise<{ from?: string; error?: string }>`) directly at the top of `LoginPage`'s body, with no enclosing `<Suspense>` boundary. This is unrelated to `new Date()`/current-time (Task 7c's bug) — it's the "runtime request data needs a Suspense boundary" rule described in Next's Cache Components migration guide for `searchParams`/`cookies()`/`headers()`. Confirmed pre-existing (not a regression from any task in this plan): `git log --oneline -- src/app/login/page.tsx` shows only the original repo's Next.js rewrite commit, and Task 7c's implementer verified via a stashed-baseline build that this page was never reached by `next build` before now — the build previously exited earlier, at `/fatigue`'s error, before ever getting far enough to prerender `/login`.
+
+**Fix:** move the `searchParams`-dependent rendering into a small async child component wrapped in `<Suspense>`, mirroring the pattern already used for the dashboard layout's "last synced" label (Task 5) — a static shell (title, password field, submit button) renders immediately; only the two `searchParams`-dependent pieces (the hidden `from` field's value, and the conditional "Incorrect password" message) stream in via the child component.
+
+**Files:**
+- Modify: `web/src/app/login/page.tsx`
+
+**Interfaces:** no exports change — `LoginPage` keeps its default export and `{ searchParams }` prop signature (Next's file convention requires this).
+
+- [ ] **Step 1: Replace the file contents**
+
+Old (full file):
+
+```tsx
+import { login } from "./actions";
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; error?: string }>;
+}) {
+  const { from = "/", error } = await searchParams;
+
+  return (
+    <main className="flex min-h-dvh items-center justify-center p-6">
+      <form action={login} className="w-full max-w-xs space-y-4">
+        <h1 className="text-xl font-semibold">Sign in</h1>
+        <input type="hidden" name="from" value={from} />
+        <input
+          type="password"
+          name="password"
+          placeholder="Password"
+          required
+          autoFocus
+          className="w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900"
+        />
+        {error && <p className="text-sm text-red-600">Incorrect password.</p>}
+        <button
+          type="submit"
+          className="w-full rounded-md bg-neutral-900 px-3 py-2 text-white dark:bg-neutral-100 dark:text-neutral-900"
+        >
+          Sign in
+        </button>
+      </form>
+    </main>
+  );
+}
+```
+
+New (full file):
+
+```tsx
+import { Suspense } from "react";
+import { login } from "./actions";
+
+async function LoginForm({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; error?: string }>;
+}) {
+  const { from = "/", error } = await searchParams;
+
+  return (
+    <form action={login} className="w-full max-w-xs space-y-4">
+      <h1 className="text-xl font-semibold">Sign in</h1>
+      <input type="hidden" name="from" value={from} />
+      <input
+        type="password"
+        name="password"
+        placeholder="Password"
+        required
+        autoFocus
+        className="w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900"
+      />
+      {error && <p className="text-sm text-red-600">Incorrect password.</p>}
+      <button
+        type="submit"
+        className="w-full rounded-md bg-neutral-900 px-3 py-2 text-white dark:bg-neutral-100 dark:text-neutral-900"
+      >
+        Sign in
+      </button>
+    </form>
+  );
+}
+
+export default function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; error?: string }>;
+}) {
+  return (
+    <main className="flex min-h-dvh items-center justify-center p-6">
+      <Suspense fallback={<p className="text-sm text-neutral-500">Loading…</p>}>
+        <LoginForm searchParams={searchParams} />
+      </Suspense>
+    </main>
+  );
+}
+```
+
+- [ ] **Step 2: Typecheck**
+
+Run: `cd web && npx tsc --noEmit`
+
+Expected: no errors.
+
+- [ ] **Step 3: Production build**
+
+Run: `cd web && npm run build`
+
+Expected: build succeeds end-to-end. This is the definitive check for this task — if it still fails on `/login` or fails anywhere else, stop and report rather than guessing at further changes.
+
+- [ ] **Step 4: Manual login smoke-test on the dev server**
+
+```bash
+cd web
+pkill -f "next dev" 2>/dev/null; sleep 1
+(SESSION_SECRET="local-smoke-test-secret" SITE_PASSWORD="localtest" nohup npm run dev > /tmp/nextdev-7d.log 2>&1 & echo $! > /tmp/nextdev-7d.pid)
+sleep 5
+curl -s -o /dev/null -w "/login -> %{http_code}\n" "http://localhost:3000/login"
+curl -s -o /dev/null -w "/login?error=1 -> %{http_code}\n" "http://localhost:3000/login?error=1"
+pkill -f "next dev"
+```
+
+Expected: both return 200. (A full interactive login flow re-check isn't necessary here — `login.actions.ts`'s server action logic is untouched by this task; only the page's rendering structure changed.)
+
+- [ ] **Step 5: Run the full test suite**
+
+Run: `cd web && npm test`
+
+Expected: same 222 tests passing.
+
+- [ ] **Step 6: Commit**
+
+```bash
+cd web && git add src/app/login/page.tsx && git commit -m "fix: wrap /login's searchParams read in Suspense (Cache Components blocking-route)"
+```
+
+---
+
 ## Task 8: Verify latency and cache-tag isolation on the dev server
 
 **Files:**
@@ -1297,7 +1709,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <SyncButton />
       </div>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-24 pt-2">
-        <ViewTransition name="tab-content" share="auto" enter="auto" default="none" className="tab-crossfade">
+        <ViewTransition name="tab-content" share="tab-crossfade" enter="auto" default="none">
           {children}
         </ViewTransition>
       </main>
@@ -1363,7 +1775,7 @@ export default function GymLayout({ children }: { children: React.ReactNode }) {
           <div style={{ viewTransitionName: "site-header" }}>
             <GymStatusHeader />
           </div>
-          <ViewTransition name="tab-content" share="auto" enter="auto" default="none" className="tab-crossfade">
+          <ViewTransition name="tab-content" share="tab-crossfade" enter="auto" default="none">
             {children}
           </ViewTransition>
         </GymOfflineProvider>
@@ -1411,6 +1823,64 @@ cd web && git add "src/app/(dashboard)/layout.tsx" src/app/gym/layout.tsx src/co
 
 ---
 
+## Task 10b: Wire the orphaned `.suspense-reveal` CSS to a real transition prop
+
+**Discovered during the final whole-branch review.** Task 9's CSS (`web/src/app/globals.css`) defines `::view-transition-old(.suspense-reveal)` / `::view-transition-new(.suspense-reveal)` plus `slide-y`/`fade` keyframes intended for the skeleton→content handoff, but Task 10's `<ViewTransition>` JSX never assigns `"suspense-reveal"` to any of `default`/`enter`/`exit`/`share`/`update` — both layouts use `enter="auto"`, `default="none"`, `share="tab-crossfade"`. The plan's own Task 9 text claimed Task 10 would reference `suspense-reveal` from JSX, but Task 10's actual code never did — the CSS is currently dead code and the intended slide-up/fade reveal never plays (falls back to the browser-default crossfade via `enter="auto"`).
+
+**Fix:** change `enter="auto"` to `enter="suspense-reveal"` on both `<ViewTransition name="tab-content" ...>` elements. This is the lowest-risk fix available without live browser verification (same prop, just a real class value instead of the inert default), and it's the correct transition type for "this instance is mounting and there's no other with the same name being deleted" per `ViewTransitionProps`' own doc comment — which covers the app's initial load and any case where content newly appears without a matching same-named unmount elsewhere.
+
+Since this specific visual behavior (whether the tuned slide/fade timing is actually perceptible, and whether it's the right transition type for every skeleton→content handoff scenario, not just initial mount) can't be confirmed without a real browser, this is being wired as a reasonable, reversible improvement — not a guaranteed-correct final answer — and is added to Task 11's on-device verification list below rather than assumed correct.
+
+**Files:**
+- Modify: `web/src/app/(dashboard)/layout.tsx`
+- Modify: `web/src/app/gym/layout.tsx`
+
+**Interfaces:** no exports change — one prop value changes on an existing element in each file.
+
+- [ ] **Step 1: `(dashboard)/layout.tsx`**
+
+Old:
+
+```tsx
+        <ViewTransition name="tab-content" share="tab-crossfade" enter="auto" default="none">
+```
+
+New:
+
+```tsx
+        <ViewTransition name="tab-content" share="tab-crossfade" enter="suspense-reveal" default="none">
+```
+
+- [ ] **Step 2: `gym/layout.tsx`**
+
+Same change — `enter="auto"` → `enter="suspense-reveal"` on its `<ViewTransition name="tab-content" ...>` element.
+
+- [ ] **Step 3: Typecheck**
+
+Run: `cd web && npx tsc --noEmit`
+
+Expected: no errors.
+
+- [ ] **Step 4: Production build**
+
+Run: `cd web && npm run build`
+
+Expected: succeeds end-to-end (same as after Task 10).
+
+- [ ] **Step 5: Run the full test suite**
+
+Run: `cd web && npm test`
+
+Expected: same 222 tests passing.
+
+- [ ] **Step 6: Commit**
+
+```bash
+cd web && git add "src/app/(dashboard)/layout.tsx" src/app/gym/layout.tsx && git commit -m "fix: wire orphaned suspense-reveal CSS to the tab-content ViewTransition's enter prop"
+```
+
+---
+
 ## Task 11: Manual verification of motion and `<Activity>` state preservation
 
 **Files:**
@@ -1431,6 +1901,7 @@ Expected: build succeeds with no Cache Components errors (any remaining `force-d
 
 With the dev server running (same auth override as Task 8), open `http://localhost:3000/today` in a real browser and:
 - Tap between all 6 bottom-nav tabs and confirm the content crossfades rather than hard-cutting, and that the header/bottom-nav never flash or reposition.
+- Reload the app cold (hard refresh) and confirm the `enter="suspense-reveal"` transition (Task 10b) actually plays the intended slide-up/fade-in on initial load, rather than a plain instant appearance. If a page ever shows its `loading.tsx` skeleton (e.g. after clearing the cache or a slow cache-miss), confirm whether the skeleton→content handoff also uses this transition or just snaps — if it just snaps, that's a known limitation of the `enter`-prop wiring (see Task 10b), not a regression, and would need a nested `<Suspense>`+`<ViewTransition>` per-page to fully cover, which is out of scope here unless this looks visually broken rather than merely "less polished than intended."
 - Open a bottom-sheet component (e.g. tap a workout row to open `WorkoutDetailSheet`, or "Log fueling" to open `LogFuelingSheet`), switch to a different bottom-nav tab, then switch back. Confirm whether the sheet is still open (expected under `<Activity>` preservation) and whether that's a pleasant "app remembered where I was" experience or a bug (e.g. stale data now showing in a re-opened sheet that assumed a fresh mount). If a specific sheet shows genuinely wrong data (not just "stayed open"), that's a **new** bite-sized task: close it in a `useLayoutEffect` cleanup or derive its open state from the URL per Next's ["Preserving UI state" guide](https://nextjs.org/docs/app/guides/preserving-ui-state) — don't speculatively patch every sheet component before observing an actual problem.
 - Toggle "Reduce motion" in the OS/browser accessibility settings and confirm transitions become instant (no animation) rather than broken/janky.
 
