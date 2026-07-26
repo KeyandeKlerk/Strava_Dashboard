@@ -1,13 +1,13 @@
 // Caches each page's data fetch so tab navigation is instant, and only
 // re-queries MotherDuck when explicitly invalidated (the webhook route calls
-// revalidateTag(DASHBOARD_DATA_TAG) after a sync completes). No time-based
+// revalidateTag on the relevant data tag(s) after a sync completes). No time-based
 // fallback revalidation on purpose — data is meant to stay cached until the
 // next sync, not silently go stale-then-refresh on a timer. If a sync ever
 // fails to invalidate (e.g. an error before that point), the cache simply
 // keeps serving the last-known-good data until the next successful sync.
-import { unstable_cache } from "next/cache";
+import { cacheTag } from "next/cache";
 import { getConnection, queryRow } from "./db/client";
-import { getAllRaceEvents, getPrimaryGoalRace } from "./db/mutations";
+import { getAllRaceEvents, getLastSynced, getPrimaryGoalRace } from "./db/mutations";
 import { listGymExercises } from "./db/gymMutations";
 import { listBodyWeightLogs } from "./db/bodyWeightMutations";
 import {
@@ -80,7 +80,15 @@ function isComradesRace(goalRace: GoalRaceRow | undefined): boolean {
   return goalRace ? goalRace.name.toLowerCase().includes("comrades") : false;
 }
 
-export const DASHBOARD_DATA_TAG = "dashboard-data";
+export const TRAINING_DATA_TAG = "training-data";
+export const GYM_DATA_TAG = "gym-data";
+export const BODYWEIGHT_DATA_TAG = "bodyweight-data";
+
+export async function getCachedLastSynced(): Promise<number | null> {
+  "use cache";
+  cacheTag(TRAINING_DATA_TAG);
+  return (await getLastSynced(await getConnection())) ?? null;
+}
 
 function rollingAvg(values: number[], window: number): Array<number | null> {
   return values.map((_, i) => {
@@ -90,9 +98,10 @@ function rollingAvg(values: number[], window: number): Array<number | null> {
   });
 }
 
-export const getTodayPageData = unstable_cache(
-  async () => {
-    const conn = await getConnection();
+export async function getTodayPageData() {
+  "use cache";
+  cacheTag(TRAINING_DATA_TAG);
+  const conn = await getConnection();
     const weekSummary = await weeklyCompletionSummary(conn);
     const [nutritionTargets, nutritionLog, pickerActivities, goalRace, acwr, ramp, mono, longPct, paceTrend] =
       await Promise.all([
@@ -197,14 +206,12 @@ export const getTodayPageData = unstable_cache(
       milestones,
       readiness,
     };
-  },
-  ["today-page-data"],
-  { tags: [DASHBOARD_DATA_TAG] },
-);
+}
 
-export const getFatiguePageData = unstable_cache(
-  async () => {
-    const conn = await getConnection();
+export async function getFatiguePageData() {
+  "use cache";
+  cacheTag(TRAINING_DATA_TAG);
+  const conn = await getConnection();
     const [tsb, ef, acwr, ramp, mono, longPct, b2b, niggles, bestEffort] = await Promise.all([
       ctlAtlTsbHistory(conn, TRAINING_START ?? undefined, TRAINING_END ?? undefined),
       weeklyEfficiencyFactor(conn),
@@ -234,14 +241,12 @@ export const getFatiguePageData = unstable_cache(
     });
 
     return { tsb, ef, acwr, ramp, mono, longPct, b2b, paceTrend, niggles, vo2max, trainingStatus };
-  },
-  ["fatigue-page-data"],
-  { tags: [DASHBOARD_DATA_TAG] },
-);
+}
 
-export const getTrainingLoadPageData = unstable_cache(
-  async () => {
-    const conn = await getConnection();
+export async function getTrainingLoadPageData() {
+  "use cache";
+  cacheTag(TRAINING_DATA_TAG);
+  const conn = await getConnection();
     const [volume, adherence, monthly, categoryLoad, goalRace] = await Promise.all([
       weeklyVolume(conn),
       planAdherence(conn),
@@ -269,14 +274,12 @@ export const getTrainingLoadPageData = unstable_cache(
     const categorySorted = [...categoryLoad].sort((a, b) => (a.week_start < b.week_start ? -1 : 1));
 
     return { volume, distanceData, timeData, longRunData, monthlySorted, categorySorted, goalRaceDistanceKm };
-  },
-  ["training-load-page-data"],
-  { tags: [DASHBOARD_DATA_TAG] },
-);
+}
 
-export const getAerobicPageData = unstable_cache(
-  async () => {
-    const conn = await getConnection();
+export async function getAerobicPageData() {
+  "use cache";
+  cacheTag(TRAINING_DATA_TAG);
+  const conn = await getConnection();
     const [zoneTime, paceTrend, qualityScores] = await Promise.all([
       weeklyZoneTime(conn),
       runPaceTrend(conn),
@@ -292,14 +295,12 @@ export const getAerobicPageData = unstable_cache(
     const latestEasyPct = easyPctValues.length > 0 ? easyPctValues[easyPctValues.length - 1].easy_pct : null;
 
     return { zoneSorted, withEasyPct, latestEasyPct, paceTrend, qualityScores };
-  },
-  ["aerobic-page-data"],
-  { tags: [DASHBOARD_DATA_TAG] },
-);
+}
 
-export const getPlanHistoryPageData = unstable_cache(
-  async () => {
-    const conn = await getConnection();
+export async function getPlanHistoryPageData() {
+  "use cache";
+  cacheTag(TRAINING_DATA_TAG);
+  const conn = await getConnection();
     const [longRuns, recent, weekSummary] = await Promise.all([
       longRunHistory(conn, 20.0, 20),
       recentActivities(conn, 20),
@@ -321,14 +322,12 @@ export const getPlanHistoryPageData = unstable_cache(
       })?.week_number ?? weekSummary[0]?.week_number;
 
     return { longRuns, recent, weekSummary, dailyByWeek, defaultWeek, today };
-  },
-  ["plan-history-page-data"],
-  { tags: [DASHBOARD_DATA_TAG] },
-);
+}
 
-export const getRacePrepPageData = unstable_cache(
-  async () => {
-    const conn = await getConnection();
+export async function getRacePrepPageData() {
+  "use cache";
+  cacheTag(TRAINING_DATA_TAG);
+  const conn = await getConnection();
     interface RaceEventRow {
       id: number;
       name: string;
@@ -424,14 +423,12 @@ export const getRacePrepPageData = unstable_cache(
       bandRows,
       predictedTimes,
     };
-  },
-  ["race-prep-page-data"],
-  { tags: [DASHBOARD_DATA_TAG] },
-);
+}
 
-export const getGymInsightsPageData = unstable_cache(
-  async () => {
-    const conn = await getConnection();
+export async function getGymInsightsPageData() {
+  "use cache";
+  cacheTag(GYM_DATA_TAG);
+  const conn = await getConnection();
     const [weeklyVolume, muscleVolume, sessionsPerWeek, records, muscleFrequency, exercises] = await Promise.all([
       weeklyGymVolume(conn),
       muscleGroupWeeklyVolume(conn),
@@ -476,22 +473,17 @@ export const getGymInsightsPageData = unstable_cache(
       defaultExerciseId,
       defaultProgression,
     };
-  },
-  ["gym-insights-page-data"],
-  { tags: [DASHBOARD_DATA_TAG] },
-);
+}
 
-export const getBodyWeightPageData = unstable_cache(
-  async () => {
-    const conn = await getConnection();
-    const logs = await listBodyWeightLogs(conn);
-    // Chart wants oldest-first (matches every other time-series chart's sort
-    // order); the recent-entries list below it wants listBodyWeightLogs' own
-    // most-recent-first order, so both are returned rather than sorting once
-    // and making one of the two callers re-sort.
-    const chartData = [...logs].sort((a, b) => (a.logged_date < b.logged_date ? -1 : 1));
-    return { logs, chartData };
-  },
-  ["body-weight-page-data"],
-  { tags: [DASHBOARD_DATA_TAG] },
-);
+export async function getBodyWeightPageData() {
+  "use cache";
+  cacheTag(BODYWEIGHT_DATA_TAG);
+  const conn = await getConnection();
+  const logs = await listBodyWeightLogs(conn);
+  // Chart wants oldest-first (matches every other time-series chart's sort
+  // order); the recent-entries list below it wants listBodyWeightLogs' own
+  // most-recent-first order, so both are returned rather than sorting once
+  // and making one of the two callers re-sort.
+  const chartData = [...logs].sort((a, b) => (a.logged_date < b.logged_date ? -1 : 1));
+  return { logs, chartData };
+}
