@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { getBodyWeightPageData } from "@/lib/pageData";
 import { todayIso } from "@/lib/shared";
 import { BodyWeightPage } from "@/components/gym/BodyWeightPage";
 
 export default async function GymBodyWeightPage() {
+  await connection();
   const { logs, chartData } = await getBodyWeightPageData();
   const today = todayIso();
 

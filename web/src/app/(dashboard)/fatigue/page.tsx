@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { getFatiguePageData } from "@/lib/pageData";
 import { firstNonNull, flag, latestCompleteDay, todayIso, type TrainingStatus } from "@/lib/shared";
 import { StatCard } from "@/components/StatCard";
@@ -23,15 +24,16 @@ const TRAINING_STATUS_STYLE: Record<TrainingStatus, string> = {
   "Insufficient Data": "border-neutral-200 bg-neutral-50 text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400",
 };
 
-// Isolated from the component body: this is a per-request Server Component
-// (force-dynamic), so wall-clock time here is intentional, not a purity bug —
-// factoring it out just satisfies the linter's static "no Date.now() in
-// render" check, which can't see that this route never gets prerendered.
+// Wall-clock time (todayIso/fourWeeksAgoMs below) needs this whole page to
+// be genuinely per-request — connection() marks it as such under Cache
+// Components, trading this page's static-shell prefetch for correctness
+// (the alternative, force-dynamic, no longer exists as a concept).
 function fourWeeksAgoMs(): number {
   return Date.now() - 28 * 86400000;
 }
 
 export default async function FatiguePage() {
+  await connection();
   const { tsb, ef, acwr, ramp, mono, longPct, b2b, paceTrend, niggles, vo2max, trainingStatus } = await getFatiguePageData();
 
   const latestTsb = tsb.length > 0 ? tsb[tsb.length - 1].tsb : null;
