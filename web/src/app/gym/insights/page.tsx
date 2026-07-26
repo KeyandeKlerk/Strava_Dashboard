@@ -5,11 +5,6 @@ import { ChartCard } from "@/components/charts/ChartCard";
 import { MuscleGroupVolumeChart, SessionsPerWeekChart, VolumeByWeekChart } from "@/components/charts/GymCharts";
 import { ExerciseProgressionSection } from "@/components/gym/ExerciseProgressionSection";
 
-// This page (unlike the /gym shell) doesn't need offline support, so it can
-// opt into per-request freshness independently of that route's static shell
-// — see web/src/app/gym/layout.tsx's header comment for why the shell itself
-// stays static.
-export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function GymInsightsPage() {

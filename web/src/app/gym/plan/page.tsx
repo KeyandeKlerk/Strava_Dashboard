@@ -2,12 +2,6 @@ import Link from "next/link";
 import { getWeeklyPlanAction, listGymExercisesAction } from "@/lib/gymActions";
 import { PlanBuilder } from "@/components/gym/PlanBuilder";
 
-// This page (unlike the /gym shell) doesn't need offline support — plan
-// editing is online-only by design — so it can opt into per-request
-// freshness independently of that route's static shell. See
-// web/src/app/gym/layout.tsx's header comment for why the shell itself
-// stays static.
-export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function GymPlanPage() {
