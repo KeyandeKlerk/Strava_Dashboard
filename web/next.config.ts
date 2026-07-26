@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 import withSerwistInit from "@serwist/next";
 
 const nextConfig: NextConfig = {
+  cacheComponents: true,
+  experimental: {
+    viewTransition: true,
+  },
   // Native bindings — must be require()'d at runtime, not webpack-bundled.
   serverExternalPackages: ["@duckdb/node-api", "@duckdb/node-bindings"],
   async headers() {
