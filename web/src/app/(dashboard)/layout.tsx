@@ -1,12 +1,8 @@
+import { Suspense } from "react";
+import { connection } from "next/server";
 import { BottomNav } from "@/components/BottomNav";
 import { SyncButton } from "@/components/SyncButton";
-import { getConnection } from "@/lib/db/client";
-import { getLastSynced } from "@/lib/db/mutations";
-
-// Without this, Next statically prerenders these pages at build time (no
-// cookies/headers/searchParams access triggers the auto-static heuristic),
-// freezing the dashboard's DB-backed data until the next deploy.
-export const dynamic = "force-dynamic";
+import { getCachedLastSynced } from "@/lib/pageData";
 
 function formatLastSynced(epochSeconds: number): string {
   const diffMin = Math.round((Date.now() - epochSeconds * 1000) / 60000);
@@ -17,13 +13,25 @@ function formatLastSynced(epochSeconds: number): string {
   return `${Math.round(diffH / 24)}d ago`;
 }
 
-export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const lastSynced = await getLastSynced(await getConnection());
+// The epoch timestamp is cached (getCachedLastSynced), but the relative-time
+// string is computed from Date.now() at request time — connection() marks
+// this subtree as genuinely per-request so the string never gets frozen
+// into the prerendered static shell (see Task 5 in the implementation plan
+// for why: without it, "5m ago" would stay fixed until the next sync
+// invalidates the cache, which can be hours later).
+async function LastSyncedLabel() {
+  await connection();
+  const lastSynced = await getCachedLastSynced();
+  return <span>{lastSynced != null ? `Last synced ${formatLastSynced(lastSynced)}` : "Not synced yet"}</span>;
+}
 
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex w-full max-w-3xl items-center justify-end gap-2 px-4 pt-2 text-right text-xs text-neutral-400">
-        <span>{lastSynced != null ? `Last synced ${formatLastSynced(lastSynced)}` : "Not synced yet"}</span>
+        <Suspense fallback={<span>Checking sync status…</span>}>
+          <LastSyncedLabel />
+        </Suspense>
         <span aria-hidden="true">·</span>
         <SyncButton />
       </div>
