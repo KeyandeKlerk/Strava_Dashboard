@@ -67,3 +67,65 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* View Transitions: bottom-nav tab crossfade + suspense-reveal handoff.
+   Progressive enhancement — browsers without View Transitions support just
+   swap instantly, no fallback code needed. */
+
+::view-transition-group(.tab-crossfade) {
+  animation-duration: 180ms;
+}
+
+::view-transition-old(.suspense-reveal) {
+  animation:
+    150ms ease-out both fade reverse,
+    150ms ease-out both slide-y reverse;
+}
+::view-transition-new(.suspense-reveal) {
+  animation:
+    210ms ease-in 150ms both fade,
+    400ms ease-in-out both slide-y;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes slide-y {
+  from {
+    transform: translateY(10px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Header and bottom nav are outside the transitioning region already, but
+   anchor them explicitly so no browser ever flashes a duplicate during a
+   transition. */
+::view-transition-group(site-header),
+::view-transition-group(bottom-nav) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(site-header),
+::view-transition-old(bottom-nav) {
+  display: none;
+}
+::view-transition-new(site-header),
+::view-transition-new(bottom-nav) {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+}
