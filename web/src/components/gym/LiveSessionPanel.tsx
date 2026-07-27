@@ -1,5 +1,5 @@
 "use client";
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { useGymOffline } from "@/lib/gymOffline/context";
 import { getActiveSession } from "@/lib/gymOffline/liveSession";
 import { SessionExerciseQueue } from "./SessionExerciseQueue";
@@ -46,7 +46,9 @@ export function LiveSessionPanel() {
         <div className="mt-3">
           <p className="text-xs text-neutral-500">Session started {activeSession.sessionDate}</p>
 
-          <RestTimer />
+          <Suspense fallback={<div className="mt-3 h-9 animate-pulse rounded-lg bg-neutral-200 dark:bg-neutral-800" />}>
+            <RestTimer />
+          </Suspense>
 
           <ActiveSessionSets sets={activeSessionSets} />
 
