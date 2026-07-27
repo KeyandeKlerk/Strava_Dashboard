@@ -15,7 +15,19 @@ export function RestTimer() {
 
   useEffect(() => {
     if (restEndsAt == null) return;
-    const interval = setInterval(() => setNow(Date.now()), 1000);
+    // Seed `now` immediately when restEndsAt changes (e.g. when
+    // startRestTimer() flips it from null to a future timestamp), rather
+    // than waiting for the first setInterval tick a second later. Without
+    // this, the first render after the change would compute `remaining`
+    // against a `now` that's as stale as however long the component has
+    // been mounted. This mirrors the pre-refactor behavior where start()
+    // set the displayed remaining value synchronously. The seed and the
+    // recurring tick both go through this same tick() callback — as with
+    // the interval's own callback, this keeps the setState call nested
+    // inside a callback rather than a bare statement in the effect body.
+    const tick = () => setNow(Date.now());
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [restEndsAt]);
 
