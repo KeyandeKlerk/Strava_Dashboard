@@ -1,6 +1,7 @@
 import { ViewTransition } from "react";
 import { BottomNav } from "@/components/BottomNav";
 import { GymOfflineProvider } from "@/lib/gymOffline/context";
+import { CompactSessionBar } from "@/components/gym/CompactSessionBar";
 import { GymStatusHeader } from "@/components/gym/GymStatusHeader";
 import { GymTabBar } from "@/components/gym/GymTabBar";
 
@@ -20,6 +21,7 @@ export default function GymLayout({ children }: { children: React.ReactNode }) {
           <div style={{ viewTransitionName: "site-header" }}>
             <GymStatusHeader />
           </div>
+          <CompactSessionBar />
           <GymTabBar />
           <ViewTransition name="tab-content" share="tab-crossfade" enter="suspense-reveal" default="none">
             {children}
