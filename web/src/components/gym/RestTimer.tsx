@@ -1,65 +1,25 @@
 "use client";
-import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
-import { nextRestTimerPreset, readStoredRestSeconds, storeRestSeconds } from "@/lib/gymRestTimer";
-import { playRestTimerBeep } from "@/lib/gymRestTimerAudio";
+import { useEffect, useState } from "react";
+import { useGymOffline } from "@/lib/gymOffline/context";
+import { computeRemainingSeconds } from "@/lib/gymOffline/liveSession";
 
-export interface RestTimerHandle {
-  // Starts (or restarts) the countdown at the currently selected preset
-  // duration. Call this from wherever a set gets logged.
-  start: () => void;
-}
+// Countdown display only — the actual timer state (restEndsAt) lives in
+// GymOfflineContext so CompactSessionBar can show the same countdown outside
+// this component's tree (see gym/layout.tsx). This component just ticks its
+// own 1s re-render and renders whatever the context says. The completion
+// beep fires once from the provider itself, not from here — see
+// context.tsx's restEndsAt effect.
+export function RestTimer() {
+  const { restEndsAt, restPresetSeconds, stopRestTimer, cycleRestPreset } = useGymOffline();
+  const [now, setNow] = useState(() => Date.now());
 
-// One rest countdown, owned by LiveSessionPanel (one per active session).
-// Visual countdown is the primary cue and works standalone; the completion
-// beep (see gymRestTimerAudio.ts) is a best-effort secondary cue that can
-// silently fail without affecting anything here.
-export function RestTimer({ ref }: { ref?: Ref<RestTimerHandle> }) {
-  const [presetSeconds, setPresetSeconds] = useState(() => readStoredRestSeconds());
-  const [remaining, setRemaining] = useState<number | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (restEndsAt == null) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [restEndsAt]);
 
-  function clearTick() {
-    if (intervalRef.current != null) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  }
-
-  // Stop any running interval on unmount (e.g. session ended mid-countdown).
-  useEffect(() => clearTick, []);
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      start() {
-        clearTick();
-        setRemaining(presetSeconds);
-        intervalRef.current = setInterval(() => {
-          setRemaining((prev) => {
-            if (prev == null || prev <= 1) {
-              clearTick();
-              playRestTimerBeep();
-              return null;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-      },
-    }),
-    [presetSeconds],
-  );
-
-  function handleStop() {
-    clearTick();
-    setRemaining(null);
-  }
-
-  function cyclePreset() {
-    const next = nextRestTimerPreset(presetSeconds);
-    setPresetSeconds(next);
-    storeRestSeconds(next);
-  }
-
+  const remaining = computeRemainingSeconds(restEndsAt, now);
   const isRunning = remaining != null;
 
   return (
@@ -70,17 +30,17 @@ export function RestTimer({ ref }: { ref?: Ref<RestTimerHandle> }) {
           <span className="font-mono text-base tabular-nums" aria-live="polite">
             {remaining}s
           </span>
-          <button type="button" onClick={handleStop} className="text-xs text-neutral-500 underline">
+          <button type="button" onClick={stopRestTimer} className="text-xs text-neutral-500 underline">
             Skip
           </button>
         </div>
       ) : (
         <button
           type="button"
-          onClick={cyclePreset}
+          onClick={cycleRestPreset}
           className="rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400"
         >
-          {presetSeconds}s
+          {restPresetSeconds}s
         </button>
       )}
     </div>
