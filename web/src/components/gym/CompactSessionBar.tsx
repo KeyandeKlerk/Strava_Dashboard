@@ -2,11 +2,13 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useGymOffline } from "@/lib/gymOffline/context";
-import { computeRemainingSeconds, formatMmSs, getActiveSession } from "@/lib/gymOffline/liveSession";
-
-function weekdayNameFor(sessionDate: string): string {
-  return new Date(`${sessionDate}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" });
-}
+import {
+  computeRemainingSeconds,
+  formatDuration,
+  formatMmSs,
+  getActiveSession,
+  weekdayNameFor,
+} from "@/lib/gymOffline/liveSession";
 
 // Always-visible summary of the in-progress session, shown on every /gym/*
 // tab (rendered once in gym/layout.tsx) so stepping onto Plan/Insights/Weight
@@ -43,11 +45,12 @@ export function CompactSessionBar() {
   const startedAtMs = activeSession.startedAt ? new Date(activeSession.startedAt).getTime() : now;
   const elapsedSeconds = Math.max(0, Math.floor((now - startedAtMs) / 1000));
 
-  const timeLabel = restRemaining != null ? `${formatMmSs(restRemaining)} rest` : formatMmSs(elapsedSeconds);
+  const timeLabel = restRemaining != null ? `${formatMmSs(restRemaining)} rest` : formatDuration(elapsedSeconds);
 
   return (
     <Link
       href="/gym"
+      style={{ viewTransitionName: "gym-session-bar" }}
       className="mb-3 flex items-center justify-between rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs
                  dark:border-violet-900 dark:bg-violet-950/30"
     >

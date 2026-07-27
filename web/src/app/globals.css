@@ -104,20 +104,26 @@ body {
   }
 }
 
-/* Header and bottom nav are outside the transitioning region already, but
-   anchor them explicitly so no browser ever flashes a duplicate during a
-   transition. */
+/* Header, bottom nav, gym tab bar, and the compact session bar are outside
+   the transitioning region already, but anchor them explicitly so no
+   browser ever flashes a duplicate during a transition. */
 ::view-transition-group(site-header),
-::view-transition-group(bottom-nav) {
+::view-transition-group(bottom-nav),
+::view-transition-group(gym-tab-bar),
+::view-transition-group(gym-session-bar) {
   animation: none;
   z-index: 100;
 }
 ::view-transition-old(site-header),
-::view-transition-old(bottom-nav) {
+::view-transition-old(bottom-nav),
+::view-transition-old(gym-tab-bar),
+::view-transition-old(gym-session-bar) {
   display: none;
 }
 ::view-transition-new(site-header),
-::view-transition-new(bottom-nav) {
+::view-transition-new(bottom-nav),
+::view-transition-new(gym-tab-bar),
+::view-transition-new(gym-session-bar) {
   animation: none;
 }
 

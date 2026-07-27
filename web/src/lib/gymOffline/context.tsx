@@ -269,6 +269,10 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
         type: "create_session",
         payload: { client_uuid: clientUuid, session_date: sessionDate, started_at: startedAt },
       });
+      // A new session never inherits a rest countdown left over from
+      // whatever was previously happening (or not) in this provider — see
+      // the identical rationale on endSession below.
+      setRestEndsAt(null);
       await refresh();
       flush();
       return session;
@@ -281,6 +285,15 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
       const db = await getGymOfflineDb();
       const existing = (await listSessionsCache(db)).find((s) => s.clientUuid === sessionClientUuid);
       if (!existing) return;
+
+      // Clear any in-flight rest countdown: this provider stays mounted at
+      // layout level across the whole /gym route, so ending a session no
+      // longer unmounts a RestTimer whose cleanup used to kill the
+      // setTimeout that fires playRestTimerBeep(). Without this, ending a
+      // session mid-rest leaves that timeout armed to beep with no visual
+      // countdown anywhere, and a session started afterward would inherit
+      // the stale restEndsAt.
+      setRestEndsAt(null);
 
       const endedAt = new Date().toISOString();
       await patchSessionCache(db, sessionClientUuid, { endedAt });

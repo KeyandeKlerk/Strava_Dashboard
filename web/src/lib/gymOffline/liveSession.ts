@@ -21,6 +21,24 @@ export function formatMmSs(totalSeconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+// Gym sessions routinely run past an hour, unlike a rest countdown — this
+// wraps formatMmSs with hour handling (h:mm:ss, hours unpadded) so elapsed
+// session time never overflows into e.g. "75:14".
+export function formatDuration(totalSeconds: number): string {
+  const clamped = Math.max(0, Math.round(totalSeconds));
+  if (clamped < 3600) return formatMmSs(clamped);
+  const h = Math.floor(clamped / 3600);
+  const m = Math.floor((clamped % 3600) / 60);
+  const s = clamped % 60;
+  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+// Shared by CompactSessionBar and LiveSessionPanel — both derive a
+// human-readable weekday label from a session's plain sessionDate string.
+export function weekdayNameFor(sessionDate: string): string {
+  return new Date(`${sessionDate}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" });
+}
+
 // `endsAt`/`now` are both epoch-ms timestamps. Rounds up so a display tied to
 // a 1s tick never flashes "0" a beat before the timer's own completion effect
 // actually fires.

@@ -10,7 +10,11 @@ export function GymTabBar() {
   const pathname = usePathname();
 
   return (
-    <nav aria-label="Gym sections" className="mb-4 flex border-b border-neutral-200 dark:border-neutral-800">
+    <nav
+      aria-label="Gym sections"
+      className="mb-4 flex border-b border-neutral-200 dark:border-neutral-800"
+      style={{ viewTransitionName: "gym-tab-bar" }}
+    >
       {GYM_TABS.map((tab) => {
         const active = isGymTabActive(pathname, tab.href);
         return (

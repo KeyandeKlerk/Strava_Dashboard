@@ -1,7 +1,7 @@
 "use client";
 import { Suspense, useMemo } from "react";
 import { useGymOffline } from "@/lib/gymOffline/context";
-import { getActiveSession } from "@/lib/gymOffline/liveSession";
+import { getActiveSession, weekdayNameFor } from "@/lib/gymOffline/liveSession";
 import { SessionExerciseQueue } from "./SessionExerciseQueue";
 import { ActiveSessionSets } from "./ActiveSessionSets";
 import { RestTimer } from "./RestTimer";
@@ -12,10 +12,6 @@ function todayIso(): string {
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const dd = String(now.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
-}
-
-function weekdayNameFor(sessionDate: string): string {
-  return new Date(`${sessionDate}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" });
 }
 
 export function LiveSessionPanel() {

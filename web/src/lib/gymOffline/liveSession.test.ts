@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CachedSession } from "./db";
-import { computeRemainingSeconds, formatMmSs, getActiveSession } from "./liveSession";
+import { computeRemainingSeconds, formatDuration, formatMmSs, getActiveSession, weekdayNameFor } from "./liveSession";
 
 function makeSession(overrides: Partial<CachedSession> = {}): CachedSession {
   return {
@@ -55,6 +55,29 @@ describe("formatMmSs", () => {
 
   it("clamps negative input to 0:00", () => {
     expect(formatMmSs(-5)).toBe("0:00");
+  });
+});
+
+describe("formatDuration", () => {
+  it("delegates to formatMmSs for sub-hour durations", () => {
+    expect(formatDuration(45)).toBe(formatMmSs(45));
+    expect(formatDuration(45)).toBe("0:45");
+    expect(formatDuration(125)).toBe("2:05");
+  });
+
+  it("formats exactly one hour with hh:mm:ss", () => {
+    expect(formatDuration(3600)).toBe("1:00:00");
+  });
+
+  it("formats multi-hour durations with hours unpadded and minutes/seconds zero-padded", () => {
+    expect(formatDuration(4514)).toBe("1:15:14");
+  });
+});
+
+describe("weekdayNameFor", () => {
+  it("maps a known date string to its weekday name", () => {
+    // 2026-07-27 is a Monday.
+    expect(weekdayNameFor("2026-07-27")).toBe("Monday");
   });
 });
 

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { getGymInsightsPageData } from "@/lib/pageData";
 import { StatCard } from "@/components/StatCard";
 import { ChartCard } from "@/components/charts/ChartCard";
@@ -14,9 +13,6 @@ export default async function GymInsightsPage() {
 
   return (
     <div className="space-y-6">
-      <Link href="/gym" className="text-xs text-neutral-500 underline">
-        ← Gym
-      </Link>
       <h1 className="text-lg font-semibold">Gym Insights</h1>
 
       <div className="grid grid-cols-2 gap-2">
