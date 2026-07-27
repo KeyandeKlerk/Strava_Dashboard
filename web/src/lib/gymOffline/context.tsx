@@ -36,6 +36,8 @@ import {
 } from "./db";
 import type { PlanEntryInput } from "@/lib/db/gymMutations";
 import { flushQueue, type FlushResult } from "./queue";
+import { nextRestTimerPreset, readStoredRestSeconds, storeRestSeconds } from "@/lib/gymRestTimer";
+import { playRestTimerBeep } from "@/lib/gymRestTimerAudio";
 
 function newUuid(): string {
   return crypto.randomUUID();
@@ -67,6 +69,11 @@ interface GymOfflineContextValue {
   pendingCount: number;
   isOnline: boolean;
   lastFlush: FlushResult | null;
+  restEndsAt: number | null;
+  restPresetSeconds: number;
+  startRestTimer(): void;
+  stopRestTimer(): void;
+  cycleRestPreset(): void;
   startSession(sessionDate: string): Promise<CachedSession>;
   endSession(sessionClientUuid: string): Promise<void>;
   logSet(input: LogSetInput): Promise<CachedSet>;
@@ -99,6 +106,46 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
   const [lastFlush, setLastFlush] = useState<FlushResult | null>(null);
   const flushing = useRef(false);
   const placeholderCounter = useRef(0);
+
+  const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
+  const [restPresetSeconds, setRestPresetSeconds] = useState(() => readStoredRestSeconds());
+
+  const startRestTimer = useCallback(() => {
+    setRestEndsAt(Date.now() + restPresetSeconds * 1000);
+  }, [restPresetSeconds]);
+
+  const stopRestTimer = useCallback(() => {
+    setRestEndsAt(null);
+  }, []);
+
+  const cycleRestPreset = useCallback(() => {
+    setRestPresetSeconds((prev) => {
+      const next = nextRestTimerPreset(prev);
+      storeRestSeconds(next);
+      return next;
+    });
+  }, []);
+
+  // Single source of truth for the completion beep: this fires exactly once
+  // per countdown regardless of how many components (RestTimer,
+  // CompactSessionBar) are simultaneously rendering the same restEndsAt —
+  // those components are read-only display consumers, not owners of the
+  // side effect.
+  useEffect(() => {
+    if (restEndsAt == null) return;
+    const remainingMs = restEndsAt - Date.now();
+    // Clamp to 0 rather than returning early: an already-elapsed
+    // restEndsAt still needs its setRestEndsAt(null) cleanup, but that
+    // setState has to happen from the timer callback (not synchronously in
+    // the effect body) to satisfy react-hooks/set-state-in-effect. A 0ms
+    // timeout still yields to the next tick, so this is behaviorally
+    // equivalent to the old synchronous branch.
+    const timeout = setTimeout(() => {
+      if (remainingMs > 0) playRestTimerBeep();
+      setRestEndsAt(null);
+    }, Math.max(remainingMs, 0));
+    return () => clearTimeout(timeout);
+  }, [restEndsAt]);
 
   const refresh = useCallback(async () => {
     const db = await getGymOfflineDb();
@@ -374,6 +421,11 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
         pendingCount,
         isOnline,
         lastFlush,
+        restEndsAt,
+        restPresetSeconds,
+        startRestTimer,
+        stopRestTimer,
+        cycleRestPreset,
         startSession,
         endSession,
         logSet,
