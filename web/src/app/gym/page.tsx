@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { LiveSessionPanel } from "@/components/gym/LiveSessionPanel";
 import { GymHistoryList } from "@/components/gym/GymHistoryList";
 
@@ -11,20 +10,7 @@ export default function GymPage() {
       <LiveSessionPanel />
 
       <div className="mt-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium">Recent sessions</h2>
-          <div className="flex items-center gap-3">
-            <Link href="/gym/plan" className="text-xs text-neutral-500 underline">
-              Plan
-            </Link>
-            <Link href="/gym/insights" className="text-xs text-neutral-500 underline">
-              Insights
-            </Link>
-            <Link href="/gym/bodyweight" className="text-xs text-neutral-500 underline">
-              Weight
-            </Link>
-          </div>
-        </div>
+        <h2 className="text-sm font-medium">Recent sessions</h2>
         <GymHistoryList />
       </div>
     </div>
