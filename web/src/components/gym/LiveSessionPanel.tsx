@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useRef } from "react";
 import { useGymOffline } from "@/lib/gymOffline/context";
+import { getActiveSession } from "@/lib/gymOffline/liveSession";
 import { SessionExerciseQueue } from "./SessionExerciseQueue";
 import { ActiveSessionSets } from "./ActiveSessionSets";
 import { RestTimer, type RestTimerHandle } from "./RestTimer";
@@ -23,14 +24,7 @@ export function LiveSessionPanel() {
   // it survives exercise swaps/next-exercise navigation within a session.
   const restTimerRef = useRef<RestTimerHandle>(null);
 
-  // The most recently started session that hasn't been ended yet — durable
-  // across reloads/app kills since sessionsCache lives in IndexedDB, not
-  // React state.
-  const activeSession = useMemo(() => {
-    return [...sessions]
-      .filter((s) => !s.endedAt)
-      .sort((a, b) => (b.startedAt ?? "").localeCompare(a.startedAt ?? ""))[0];
-  }, [sessions]);
+  const activeSession = useMemo(() => getActiveSession(sessions), [sessions]);
 
   const activeSessionSets = useMemo(() => {
     if (!activeSession) return [];
