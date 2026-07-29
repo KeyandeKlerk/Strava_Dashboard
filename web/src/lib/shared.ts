@@ -98,6 +98,23 @@ export function latestCompleteDay<T extends { day: string }, K extends keyof T>(
   );
 }
 
+// Week-granularity sibling of latestCompleteDay above — for a metric like
+// longRunPct (longest run / total distance that week), the current week's
+// ratio isn't a real signal until the week is over: one run logged on
+// Monday is trivially "100% of this week's volume so far," not an actual
+// long-run-percentage violation. Skips any week that hasn't fully elapsed
+// yet (today still within [week_start, week_start+6]), not just "today".
+export function latestCompleteWeek<T extends { week_start: string }, K extends keyof T>(
+  rows: T[],
+  key: K,
+  today: string,
+): T[K] | null {
+  return firstNonNull(
+    rows.filter((r) => addDaysToDateString(r.week_start, 7) <= today),
+    key,
+  );
+}
+
 // Same "don't read today's still-accruing row as a real signal" concern as
 // latestCompleteDay above, but for ctlAtlTsbHistory's rows specifically:
 // they're oldest-first (ascending), and the training-status trend needs the

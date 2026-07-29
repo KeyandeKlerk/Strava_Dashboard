@@ -8,6 +8,7 @@ import {
   danielsVo2max,
   firstNonNull,
   latestCompleteDay,
+  latestCompleteWeek,
   riegelPredict,
   weekDates,
 } from "./shared";
@@ -98,6 +99,48 @@ describe("latestCompleteDay", () => {
   it("returns null when only today has data", () => {
     const rows = [{ day: "2026-07-20", v: 9 }];
     expect(latestCompleteDay(rows, "v", "2026-07-20")).toBeNull();
+  });
+});
+
+describe("latestCompleteWeek", () => {
+  it("skips the still-in-progress current week, even mid-week", () => {
+    const rows = [
+      // 2026-07-20 is a Monday; this week runs through 2026-07-26.
+      { week_start: "2026-07-20 00:00:00", v: 100 }, // one run logged so far = 100% "long run" — not a real signal
+      { week_start: "2026-07-13 00:00:00", v: 25 },
+    ];
+    // Wednesday of the current week — week isn't over yet.
+    expect(latestCompleteWeek(rows, "v", "2026-07-22")).toBe(25);
+  });
+
+  it("skips the current week even on its last calendar day (Sunday)", () => {
+    const rows = [
+      { week_start: "2026-07-20 00:00:00", v: 100 },
+      { week_start: "2026-07-13 00:00:00", v: 25 },
+    ];
+    expect(latestCompleteWeek(rows, "v", "2026-07-26")).toBe(25);
+  });
+
+  it("includes a week once it has fully elapsed", () => {
+    const rows = [
+      { week_start: "2026-07-20 00:00:00", v: 100 },
+      { week_start: "2026-07-13 00:00:00", v: 25 },
+    ];
+    expect(latestCompleteWeek(rows, "v", "2026-07-27")).toBe(100);
+  });
+
+  it("falls back through null rows before the current week", () => {
+    const rows = [
+      { week_start: "2026-07-20 00:00:00", v: 100 },
+      { week_start: "2026-07-13 00:00:00", v: null },
+      { week_start: "2026-07-06 00:00:00", v: 30 },
+    ];
+    expect(latestCompleteWeek(rows, "v", "2026-07-22")).toBe(30);
+  });
+
+  it("returns null when only the current (incomplete) week has data", () => {
+    const rows = [{ week_start: "2026-07-20 00:00:00", v: 100 }];
+    expect(latestCompleteWeek(rows, "v", "2026-07-22")).toBeNull();
   });
 });
 

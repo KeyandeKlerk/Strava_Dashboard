@@ -62,6 +62,7 @@ import {
   firstNonNull,
   flag,
   latestCompleteDay,
+  latestCompleteWeek,
   riegelPredict,
   todayIso,
 } from "./shared";
@@ -132,10 +133,13 @@ export async function getTodayPageData() {
     // (0km before you've run), which would otherwise read as a false dip.
     // Ramp is a calendar-week metric whose in-progress week already
     // substitutes the plan's target distance, so it needs no such anchor.
+    // Long run % needs the week-granularity equivalent: early in a week
+    // (e.g. one run logged Monday), longest/total is trivially ~100%, which
+    // isn't a real long-run-percentage violation.
     const latestAcwr = latestCompleteDay(acwr, "acwr", today);
     const latestRamp = firstNonNull(ramp, "ramp_pct");
     const latestMono = latestCompleteDay(mono, "monotony", today);
-    const latestLongPct = firstNonNull(longPct, "long_run_pct");
+    const latestLongPct = latestCompleteWeek(longPct, "long_run_pct", today);
     const decoupled = paceTrend
       .filter((r) => r.decoupling_pct != null)
       .sort((a, b) => (a.activity_date < b.activity_date ? -1 : 1));
