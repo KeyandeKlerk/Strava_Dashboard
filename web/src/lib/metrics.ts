@@ -37,7 +37,12 @@ export async function weeklyVolume(conn: DuckDBConnection): Promise<WeeklyVolume
         SUM(CASE WHEN category = 'running' THEN moving_time_min ELSE 0 END) AS run_time_min,
         SUM(moving_time_min) AS total_time_min,
         COUNT(*)::INTEGER AS session_count,
-        (7 - COUNT(DISTINCT start_date_local::DATE))::INTEGER AS rest_day_count
+        -- Days elapsed so far this week (capped at 7, so a fully-elapsed
+        -- past week is unaffected) rather than a hardcoded 7 — otherwise the
+        -- still-in-progress current week counts every day that simply
+        -- hasn't happened yet as a "rest day" instead of "no data yet".
+        (LEAST(7, DATE_DIFF('day', MIN(DATE_TRUNC('week', start_date_local::DATE)), CURRENT_DATE) + 1)
+            - COUNT(DISTINCT start_date_local::DATE))::INTEGER AS rest_day_count
      FROM activities
      WHERE ${dateFilter()}
      GROUP BY 1

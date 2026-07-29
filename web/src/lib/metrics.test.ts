@@ -181,6 +181,25 @@ describe("weeklyVolume", () => {
     const rows = await metrics.weeklyVolume(conn);
     approx(rows[0].total_time_min, 120.0);
   });
+
+  it("counts every day not trained as a rest day for a fully-elapsed past week", async () => {
+    await insertRun(1, "2026-03-11T07:00:00", 10.0); // Wed — 1 of 7 days trained
+    const rows = await metrics.weeklyVolume(conn);
+    const row = rows.find((r) => r.week_start.startsWith("2026-03-09"));
+    expect(row?.rest_day_count).toBe(6);
+  });
+
+  it("does not count days that haven't happened yet this week as rest days", async () => {
+    const thisWeekMonday = mondayOfCurrentWeek();
+    await insertRun(1, `${thisWeekMonday}T07:00:00`, 10.0); // Monday of this week only
+
+    const rows = await metrics.weeklyVolume(conn);
+    const row = rows.find((r) => r.week_start.startsWith(thisWeekMonday));
+
+    const now = new Date();
+    const isoWeekday = ((now.getDay() + 6) % 7) + 1; // Mon=1 .. Sun=7 — days elapsed so far, inclusive of today
+    expect(row?.rest_day_count).toBe(isoWeekday - 1);
+  });
 });
 
 it("weeklyCategoryLoad splits categories", async () => {

@@ -11,6 +11,7 @@ import {
   latestCompleteWeek,
   riegelPredict,
   weekDates,
+  weekLabel,
 } from "./shared";
 
 describe("SESSION_ICON", () => {
@@ -32,6 +33,39 @@ describe("weekDates", () => {
   it("rolls over correctly across a month boundary", () => {
     const days = weekDates("2026-07-27");
     expect(days[6]).toEqual({ date: "2026-08-02", dayName: "Sunday" });
+  });
+});
+
+describe("weekLabel", () => {
+  const originalTZ = process.env.TZ;
+  afterEach(() => {
+    process.env.TZ = originalTZ;
+  });
+
+  function baseRow(overrides: Partial<Parameters<typeof weekLabel>[0]> = {}) {
+    return {
+      week_number: 1,
+      week_start_date: "2026-10-27", // Tue; week runs through Nov 2
+      phase: "Base",
+      is_deload: false,
+      days_done: 0,
+      total_days: 7,
+      ...overrides,
+    };
+  }
+
+  it("shows the correct end-of-week date across a DST fall-back transition", () => {
+    process.env.TZ = "America/New_York"; // DST ends (fall back) Nov 1, 2026
+    const label = weekLabel(baseRow());
+    const endDay = label.match(/–(\d+)\s/)?.[1];
+    expect(endDay).toBe("2");
+  });
+
+  it("shows the correct end-of-week date under UTC (no DST)", () => {
+    process.env.TZ = "UTC";
+    const label = weekLabel(baseRow());
+    const endDay = label.match(/–(\d+)\s/)?.[1];
+    expect(endDay).toBe("2");
   });
 });
 

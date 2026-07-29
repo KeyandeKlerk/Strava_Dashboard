@@ -173,10 +173,14 @@ export function weekLabel(row: {
   total_days: number;
 }): string {
   const start = new Date(`${row.week_start_date}T00:00:00`);
-  const end = new Date(start.getTime() + 6 * 86400000);
+  // Calendar-component arithmetic (via addDaysToDateString), not raw ms —
+  // 6 * 86400000ms isn't always exactly 6 calendar days in a DST-observing
+  // timezone (a "fall back" transition within the week would land this a
+  // day early; see this function's test).
+  const endDay = Number(addDaysToDateString(row.week_start_date, 6).slice(8, 10));
   const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "2-digit" });
   const deloadTag = row.is_deload ? " [DELOAD]" : "";
-  return `Wk ${String(row.week_number).padStart(2, "0")}  ${fmt(start)}–${end.getDate()}  ·  ${row.phase}${deloadTag}  ·  ${row.days_done}/${row.total_days} done`;
+  return `Wk ${String(row.week_number).padStart(2, "0")}  ${fmt(start)}–${endDay}  ·  ${row.phase}${deloadTag}  ·  ${row.days_done}/${row.total_days} done`;
 }
 
 export interface WeekDate {
