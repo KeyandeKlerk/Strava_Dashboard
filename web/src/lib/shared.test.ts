@@ -4,6 +4,7 @@ import {
   addDaysToDateString,
   computeReadiness,
   computeTrainingStatus,
+  ctlTrendInputs,
   danielsVo2max,
   firstNonNull,
   latestCompleteDay,
@@ -97,6 +98,47 @@ describe("latestCompleteDay", () => {
   it("returns null when only today has data", () => {
     const rows = [{ day: "2026-07-20", v: 9 }];
     expect(latestCompleteDay(rows, "v", "2026-07-20")).toBeNull();
+  });
+});
+
+describe("ctlTrendInputs", () => {
+  // ctlAtlTsbHistory's rows are oldest-first (ascending by day), unlike
+  // latestCompleteDay's callers (acwr/ramp), which are newest-first.
+  function row(day: string, ctl: number, tsb: number) {
+    return { day, ctl, tsb };
+  }
+
+  it("uses the latest fully-elapsed day, not today's still-accruing (partial) row", () => {
+    const rows = [
+      row("2026-06-01", 20, 1),
+      row("2026-06-02", 21, 1),
+      row("2026-07-28", 24.61, 1.9), // yesterday, fully elapsed
+      row("2026-07-29", 24.02, 0.12), // today — not done yet (e.g. a night runner who hasn't logged yet)
+    ];
+
+    const result = ctlTrendInputs(rows, "2026-07-29", 1);
+
+    expect(result.ctlNow).toBe(24.61);
+    expect(result.tsb).toBe(1.9);
+  });
+
+  it("counts the lookback from the latest COMPLETE day, not from the raw (today-including) array end", () => {
+    // 29 complete days (oldest..newest), then a "today" row that must be
+    // excluded from both the "latest" pick and the lookback count.
+    const completeDays = Array.from({ length: 29 }, (_, i) => row(`complete-${i}`, i, 0));
+    const rows = [...completeDays, row("today", 999, 999)];
+
+    const result = ctlTrendInputs(rows, "today", 28);
+
+    // Latest complete day is index 28 (ctl=28); 28 days before it is index 0 (ctl=0).
+    expect(result.ctlNow).toBe(28);
+    expect(result.ctlPast).toBe(0);
+  });
+
+  it("returns nulls when there is no fully-elapsed day yet", () => {
+    const rows = [row("2026-07-29", 24.02, 0.12)];
+    const result = ctlTrendInputs(rows, "2026-07-29", 28);
+    expect(result).toEqual({ ctlNow: null, ctlPast: null, tsb: null });
   });
 });
 

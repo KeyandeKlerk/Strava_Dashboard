@@ -57,6 +57,7 @@ import {
   addDaysToDateString,
   computeReadiness,
   computeTrainingStatus,
+  ctlTrendInputs,
   danielsVo2max,
   firstNonNull,
   flag,
@@ -228,15 +229,17 @@ export async function getFatiguePageData() {
 
     const vo2max = bestEffort ? danielsVo2max(bestEffort.distance_km, bestEffort.moving_time_min) : null;
 
-    // Training status: CTL "now" vs ~28 days back in the same ascending
-    // series, same worst-case-first philosophy as the readiness verdict.
+    // Training status: CTL "now" vs ~28 complete days back, same worst-case-
+    // first philosophy as the readiness verdict, and the same "don't read
+    // today's not-yet-happened row as a real dip" fix as acwr/ramp below —
+    // e.g. a night runner checking this before their run has synced would
+    // otherwise see today's zero-so-far load pull "now" down.
     const today = todayIso();
-    const latestCtlRow = tsb.length > 0 ? tsb[tsb.length - 1] : null;
-    const ctlPast = tsb.length > 0 ? tsb[Math.max(0, tsb.length - 1 - 28)].ctl : null;
+    const { ctlNow, ctlPast, tsb: tsbNow } = ctlTrendInputs(tsb, today, 28);
     const trainingStatus = computeTrainingStatus({
-      ctlNow: latestCtlRow?.ctl ?? null,
+      ctlNow,
       ctlPast,
-      tsb: latestCtlRow?.tsb ?? null,
+      tsb: tsbNow,
       acwr: latestCompleteDay(acwr, "acwr", today),
       rampPct: firstNonNull(ramp, "ramp_pct"),
     });

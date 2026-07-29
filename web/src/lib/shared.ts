@@ -98,6 +98,24 @@ export function latestCompleteDay<T extends { day: string }, K extends keyof T>(
   );
 }
 
+// Same "don't read today's still-accruing row as a real signal" concern as
+// latestCompleteDay above, but for ctlAtlTsbHistory's rows specifically:
+// they're oldest-first (ascending), and the training-status trend needs the
+// whole latest-complete-day row (ctl + tsb together) plus another row a
+// fixed number of *complete* days before it — not before the raw array end,
+// which would silently fold today's not-yet-happened row into the count.
+export function ctlTrendInputs<T extends { day: string; ctl: number; tsb: number }>(
+  rows: T[],
+  today: string,
+  lookbackDays: number,
+): { ctlNow: number | null; ctlPast: number | null; tsb: number | null } {
+  const complete = rows.filter((r) => r.day < today);
+  if (complete.length === 0) return { ctlNow: null, ctlPast: null, tsb: null };
+  const latest = complete[complete.length - 1];
+  const past = complete[Math.max(0, complete.length - 1 - lookbackDays)];
+  return { ctlNow: latest.ctl, ctlPast: past.ctl, tsb: latest.tsb };
+}
+
 export interface ReadinessSignal {
   label: string;
   flag: Flag;
