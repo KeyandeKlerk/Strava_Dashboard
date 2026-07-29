@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeRedirectTarget } from "./actions";
+import { sanitizeRedirectTarget } from "./auth";
 
 describe("sanitizeRedirectTarget", () => {
   it("allows a same-origin relative path", () => {

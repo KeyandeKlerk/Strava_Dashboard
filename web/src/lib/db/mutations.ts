@@ -571,7 +571,7 @@ export async function deleteNiggleLog(conn: DuckDBConnection, id: number): Promi
 export async function getAllRaceEvents<T = Record<string, unknown>>(conn: DuckDBConnection) {
   return queryRows<T>(
     conn,
-    `SELECT id, name, race_date, distance_km, priority,
+    `SELECT id, name, race_date::VARCHAR AS race_date, distance_km, priority,
             target_finish_h, notes, strava_activity_id, terrain_factor, cutoff_h
      FROM race_events
      ORDER BY race_date`,
@@ -585,7 +585,7 @@ export async function getAllRaceEvents<T = Record<string, unknown>>(conn: DuckDB
 export async function getPrimaryGoalRace<T = Record<string, unknown>>(conn: DuckDBConnection): Promise<T | undefined> {
   return queryRow<T>(
     conn,
-    `SELECT id, name, race_date, distance_km, priority,
+    `SELECT id, name, race_date::VARCHAR AS race_date, distance_km, priority,
             target_finish_h, notes, strava_activity_id, terrain_factor, cutoff_h
      FROM race_events
      WHERE race_date >= CURRENT_DATE

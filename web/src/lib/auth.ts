@@ -55,3 +55,13 @@ export function checkSitePassword(candidate: string): boolean {
   if (!expected) throw new Error("Missing required env var: SITE_PASSWORD");
   return timingSafeEqual(candidate, expected);
 }
+
+// Only a same-origin relative path is a safe redirect target — anything else
+// (absolute URL, protocol-relative "//host", a bare scheme) risks sending a
+// freshly-authenticated user off-site via a crafted `from` link. Lives here
+// (not in login/actions.ts) because that file has "use server" at the top,
+// which requires every export to be an async Server Action.
+export function sanitizeRedirectTarget(path: string): string {
+  if (path.startsWith("/") && !path.startsWith("//")) return path;
+  return "/";
+}

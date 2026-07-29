@@ -294,6 +294,16 @@ describe("upsertRaceEvent", () => {
   });
 });
 
+describe("getAllRaceEvents", () => {
+  it("returns race_date as a plain YYYY-MM-DD string, not a native Date value", async () => {
+    await upsertRaceEvent(conn, { name: "Comrades", race_date: "2027-06-13", distance_km: 90.0, priority: "A" });
+
+    const rows = await getAllRaceEvents<{ race_date: string }>(conn);
+    expect(typeof rows[0].race_date).toBe("string");
+    expect(rows[0].race_date).toBe("2027-06-13");
+  });
+});
+
 describe("upsertActivity", () => {
   it("persists and updates description", async () => {
     await upsertActivity(conn, {
@@ -348,6 +358,14 @@ describe("getPrimaryGoalRace", () => {
 
     const goal = await getPrimaryGoalRace<{ name: string }>(conn);
     expect(goal).toBeUndefined();
+  });
+
+  it("returns race_date as a plain YYYY-MM-DD string, not a native Date value", async () => {
+    await upsertRaceEvent(conn, { name: "A Race", race_date: "2027-06-13", distance_km: 90.0, priority: "A" });
+
+    const goal = await getPrimaryGoalRace<{ race_date: string }>(conn);
+    expect(typeof goal?.race_date).toBe("string");
+    expect(goal?.race_date).toBe("2027-06-13");
   });
 });
 
