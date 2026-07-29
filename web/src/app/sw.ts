@@ -24,6 +24,18 @@ const serwist = new Serwist({
   clientsClaim: true,
   navigationPreload: true,
   runtimeCaching: [...defaultCache],
+  // Shown only when a navigation's own strategy (defaultCache's NetworkFirst
+  // for pages, see the comment above) can't produce a response at all —
+  // i.e. genuinely offline with nothing relevant cached — rather than
+  // falling through to the browser's generic offline error.
+  fallbacks: {
+    entries: [
+      {
+        url: "/offline",
+        matcher: ({ request }) => request.destination === "document",
+      },
+    ],
+  },
 });
 
 serwist.addEventListeners();
