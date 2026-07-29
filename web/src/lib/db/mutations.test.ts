@@ -5,6 +5,7 @@ import {
   addDailySession,
   addNiggleLog,
   addNutritionLog,
+  clearTrainingPlan,
   deleteDailySession,
   deleteNiggleLog,
   deleteNutritionLog,
@@ -12,10 +13,12 @@ import {
   getPrimaryGoalRace,
   moveDailySession,
   queryPlanDay,
+  syncWeeklyFromDaily,
   updateGearName,
   upsertActivity,
   upsertNutritionTargets,
   upsertRaceEvent,
+  upsertTrainingPlanWeek,
 } from "./mutations";
 import { queryRow } from "./client";
 
@@ -378,5 +381,25 @@ describe("updateGearName", () => {
 
     expect(row1?.gear_name).toBe("Nike Pegasus 39");
     expect(row2?.gear_name).toBeNull();
+  });
+});
+
+describe("clearTrainingPlan / syncWeeklyFromDaily reimport", () => {
+  it("preserves an existing week's phase/is_deload across a CSV-reimport-style clear + reinsert", async () => {
+    await addDailySession(conn, baseSession({ planned_date: "2026-07-20", week_number: 1 }));
+    await syncWeeklyFromDaily(conn);
+    await upsertTrainingPlanWeek(conn, { week_number: 1, phase: "Taper", is_deload: true });
+
+    // Simulate re-importing a CSV: clear the daily rows and reinsert.
+    await clearTrainingPlan(conn);
+    await addDailySession(conn, baseSession({ planned_date: "2026-07-20", week_number: 1, description: "Updated" }));
+    await syncWeeklyFromDaily(conn);
+
+    const row = await queryRow<{ phase: string; is_deload: boolean }>(
+      conn,
+      "SELECT phase, is_deload FROM training_plan WHERE week_number = 1",
+    );
+    expect(row?.phase).toBe("Taper");
+    expect(row?.is_deload).toBe(true);
   });
 });

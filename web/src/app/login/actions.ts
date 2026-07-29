@@ -3,9 +3,17 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { checkSitePassword, createSessionToken, SESSION_COOKIE } from "@/lib/auth";
 
+// Only a same-origin relative path is a safe redirect target — anything else
+// (absolute URL, protocol-relative "//host", a bare scheme) risks sending a
+// freshly-authenticated user off-site via a crafted `from` link.
+export function sanitizeRedirectTarget(path: string): string {
+  if (path.startsWith("/") && !path.startsWith("//")) return path;
+  return "/";
+}
+
 export async function login(formData: FormData): Promise<void> {
   const password = String(formData.get("password") ?? "");
-  const from = String(formData.get("from") ?? "/");
+  const from = sanitizeRedirectTarget(String(formData.get("from") ?? "/"));
 
   if (!checkSitePassword(password)) {
     redirect(`/login?error=1&from=${encodeURIComponent(from)}`);
@@ -21,5 +29,5 @@ export async function login(formData: FormData): Promise<void> {
     maxAge: 60 * 60 * 24 * 30, // 30 days
   });
 
-  redirect(from || "/");
+  redirect(from);
 }

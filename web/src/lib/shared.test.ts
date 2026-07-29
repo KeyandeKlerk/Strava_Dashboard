@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   SESSION_ICON,
+  addDaysToDateString,
   computeReadiness,
   computeTrainingStatus,
   danielsVo2max,
@@ -29,6 +30,33 @@ describe("weekDates", () => {
   it("rolls over correctly across a month boundary", () => {
     const days = weekDates("2026-07-27");
     expect(days[6]).toEqual({ date: "2026-08-02", dayName: "Sunday" });
+  });
+});
+
+describe("addDaysToDateString", () => {
+  const originalTZ = process.env.TZ;
+  afterEach(() => {
+    process.env.TZ = originalTZ;
+  });
+
+  it("adds days correctly under UTC", () => {
+    process.env.TZ = "UTC";
+    expect(addDaysToDateString("2026-07-20", 7)).toBe("2026-07-27");
+  });
+
+  it("adds days correctly under a positive-UTC-offset timezone, without rolling back a day", () => {
+    process.env.TZ = "Africa/Johannesburg"; // UTC+2
+    expect(addDaysToDateString("2026-07-20", 7)).toBe("2026-07-27");
+  });
+
+  it("adds days correctly under a negative-UTC-offset timezone, without rolling forward a day", () => {
+    process.env.TZ = "America/New_York"; // UTC-4/-5
+    expect(addDaysToDateString("2026-07-20", 7)).toBe("2026-07-27");
+  });
+
+  it("rolls over a month boundary", () => {
+    process.env.TZ = "Africa/Johannesburg";
+    expect(addDaysToDateString("2026-07-27", 7)).toBe("2026-08-03");
   });
 });
 

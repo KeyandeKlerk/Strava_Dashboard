@@ -93,7 +93,11 @@ async function sendMutation(db: GymOfflineDb, mutation: PendingMutation, fetchIm
       const placeholder = await findExerciseByClientUuid(db, mutation.clientUuid);
       await putExerciseCache(db, {
         id: body.id,
-        client_uuid: body.client_uuid,
+        // Kept as this mutation's own clientUuid (not body.client_uuid) so
+        // findExerciseByClientUuid still resolves for any other pending
+        // create_set mutation referencing it — even when the server dedups
+        // this add to a pre-existing exercise with a different client_uuid.
+        client_uuid: mutation.clientUuid,
         name: String(mutation.payload.name),
         muscle_group: String(mutation.payload.muscle_group),
         equipment: (mutation.payload.equipment as string | null) ?? null,

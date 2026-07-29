@@ -197,6 +197,73 @@ describe("exercise placeholder resolution", () => {
     expect(sets[0].exerciseId).toBe(99);
   });
 
+  it("resolves queued sets when the exercise sync dedups to an existing exercise with a different server client_uuid", async () => {
+    // Placeholder exercise created offline, whose name happens to collide
+    // (case-insensitively) with an exercise that already exists server-side.
+    await putExerciseCache(db, {
+      id: -1,
+      client_uuid: "ex-client-new",
+      name: "Bench Press",
+      muscle_group: "Chest",
+      equipment: null,
+      is_custom: true,
+    });
+    await putSessionCache(db, {
+      clientUuid: "sess-1",
+      id: 5,
+      sessionDate: "2026-07-20",
+      startedAt: null,
+      endedAt: null,
+      activityId: null,
+      notes: null,
+    });
+    await putSetCache(db, {
+      clientUuid: "set-1",
+      sessionClientUuid: "sess-1",
+      exerciseId: -1,
+      setNumber: 1,
+      weightKg: 50,
+      reps: 10,
+      isWarmup: false,
+      rpe: null,
+    });
+
+    await enqueueMutation(db, {
+      clientUuid: "ex-client-new",
+      type: "create_exercise",
+      payload: { client_uuid: "ex-client-new", name: "Bench Press", muscle_group: "Chest" },
+      createdAt: 1,
+    });
+    await enqueueMutation(db, {
+      clientUuid: "set-1",
+      type: "create_set",
+      payload: {
+        client_uuid: "set-1",
+        session_client_uuid: "sess-1",
+        exercise_client_uuid: "ex-client-new",
+        set_number: 1,
+        weight_kg: 50,
+        reps: 10,
+      },
+      createdAt: 2,
+    });
+
+    const fetchImpl = (async (url: string) => {
+      if (String(url).includes("/api/gym/exercises")) {
+        // Server-side dedup: returns the *existing* row's own client_uuid,
+        // not the one this device generated for its placeholder.
+        return jsonResponse({ id: 42, client_uuid: "ex-client-existing-on-server" });
+      }
+      return jsonResponse({ id: 1, client_uuid: "set-1" });
+    }) as typeof fetch;
+
+    const result = await flushQueue(fetchImpl, db);
+
+    expect(result).toEqual({ sentCount: 2, stoppedReason: null });
+    const sets = await listSetsForSession(db, "sess-1");
+    expect(sets[0].exerciseId).toBe(42);
+  });
+
   it("blocks the create_set mutation until its exercise has synced (FIFO dependency)", async () => {
     await putExerciseCache(db, {
       id: -1,

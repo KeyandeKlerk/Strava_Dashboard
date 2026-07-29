@@ -113,11 +113,23 @@ export interface AcwrRow {
 export async function acwrHistory(conn: DuckDBConnection): Promise<AcwrRow[]> {
   return queryRows<AcwrRow>(
     conn,
-    `WITH daily AS (
+    `WITH date_spine AS (
+        SELECT UNNEST(generate_series(
+            (SELECT MIN(start_date_local::DATE) FROM activities WHERE ${dateFilter()}),
+            CURRENT_DATE,
+            INTERVAL '1 day'
+        ))::DATE AS day
+    ),
+    daily_load AS (
         SELECT start_date_local::DATE AS day, SUM(load_score) AS daily_load
         FROM activities
         WHERE ${dateFilter()}
         GROUP BY 1
+    ),
+    daily AS (
+        SELECT d.day, COALESCE(l.daily_load, 0.0) AS daily_load
+        FROM date_spine d
+        LEFT JOIN daily_load l ON d.day = l.day
     ),
     rolling AS (
         SELECT
@@ -154,13 +166,29 @@ export interface RampRateRow {
 export async function weeklyRampRate(conn: DuckDBConnection): Promise<RampRateRow[]> {
   return queryRows<RampRateRow>(
     conn,
-    `WITH weekly_actual AS (
+    `WITH week_spine AS (
+        SELECT UNNEST(generate_series(
+            DATE_TRUNC('week', (SELECT MIN(start_date_local::DATE) FROM activities WHERE ${dateFilter()})),
+            DATE_TRUNC('week', CURRENT_DATE),
+            INTERVAL '7 day'
+        ))::DATE AS week_start
+    ),
+    weekly_actual_raw AS (
         SELECT
             DATE_TRUNC('week', start_date_local::DATE) AS week_start,
             SUM(CASE WHEN category = 'running' THEN COALESCE(distance_km, 0) ELSE 0 END) AS actual_km
         FROM activities
         WHERE ${dateFilter()}
         GROUP BY 1
+    ),
+    weekly_actual AS (
+        -- A week with no activity of any kind (not just no running) is a
+        -- real rest week, not a missing row — otherwise LAG() below skips
+        -- straight to the last week that had *any* activity, mislabeling a
+        -- multi-week gap as "no change from last week."
+        SELECT ws.week_start, COALESCE(war.actual_km, 0.0) AS actual_km
+        FROM week_spine ws
+        LEFT JOIN weekly_actual_raw war ON war.week_start = ws.week_start
     ),
     weekly AS (
         SELECT

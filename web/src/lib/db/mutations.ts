@@ -220,9 +220,13 @@ export async function syncWeeklyFromDaily(conn: DuckDBConnection): Promise<void>
   `);
 }
 
+// Only clears the daily schedule, not the weekly overlay (training_plan) —
+// week rows carry phase/is_deload metadata set independently of the daily
+// import (see upsertTrainingPlanWeek), and syncWeeklyFromDaily's ON CONFLICT
+// UPDATE already deliberately excludes those columns so a reimport doesn't
+// reset periodization for weeks that still exist afterward.
 export async function clearTrainingPlan(conn: DuckDBConnection): Promise<void> {
   await conn.run("DELETE FROM training_plan_daily");
-  await conn.run("DELETE FROM training_plan");
 }
 
 export interface DailySessionInput {

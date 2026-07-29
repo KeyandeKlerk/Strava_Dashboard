@@ -9,6 +9,7 @@ import {
   muscleGroupFrequency,
   muscleGroupWeeklyVolume,
   personalRecords,
+  pivotMuscleGroupVolume,
   sessionVolume,
   weeklyGymVolume,
 } from "./gymMetrics";
@@ -169,6 +170,42 @@ describe("volume aggregations", () => {
     const groupRows = await muscleGroupWeeklyVolume(conn);
     const byGroup = Object.fromEntries(groupRows.map((r) => [r.muscle_group, r.total_volume_kg]));
     expect(byGroup["Chest"]).toBe(500);
+  });
+});
+
+describe("pivotMuscleGroupVolume", () => {
+  it("keeps every group as its own series when within the palette limit", () => {
+    const rows = [
+      { week_start: "2026-07-06", muscle_group: "Quads", total_volume_kg: 600 },
+      { week_start: "2026-07-06", muscle_group: "Chest", total_volume_kg: 500 },
+    ];
+    const result = pivotMuscleGroupVolume(rows);
+    expect(result.muscleGroups).toEqual(["Chest", "Quads"]);
+    expect(result.pivoted).toEqual([{ week_start: "2026-07-06", Chest: 500, Quads: 600 }]);
+  });
+
+  it("folds the lowest-volume groups into an Other bucket beyond the palette limit, instead of reusing a color", () => {
+    const groups = ["g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8", "g9"];
+    const volumes = [900, 800, 700, 600, 500, 400, 300, 200, 100];
+    const rows = groups.map((muscle_group, i) => ({
+      week_start: "2026-07-06",
+      muscle_group,
+      total_volume_kg: volumes[i],
+    }));
+
+    const result = pivotMuscleGroupVolume(rows, 8);
+
+    // 7 highest-volume groups keep their own series; the palette has 8 hues
+    // total, so the 8th slot is a single folded "Other" bucket, not a 9th
+    // distinct color repeating one of the first 8.
+    expect(result.muscleGroups).toHaveLength(8);
+    expect(result.muscleGroups).toContain("Other");
+    expect(result.muscleGroups).not.toContain("g8");
+    expect(result.muscleGroups).not.toContain("g9");
+
+    const week = result.pivoted[0];
+    expect(week["g1"]).toBe(900);
+    expect(week["Other"]).toBe(200 + 100);
   });
 });
 

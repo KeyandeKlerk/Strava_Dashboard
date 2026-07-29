@@ -118,6 +118,7 @@ export async function addCustomExerciseAction(formData: FormData): Promise<GymAc
   const exercise = await queryRow<GymExerciseRow>(conn, "SELECT id, client_uuid, name, muscle_group, equipment, is_custom FROM gym_exercises WHERE id = $id", {
     id: result.id,
   });
+  updateTag(GYM_DATA_TAG);
   return { exercise };
 }
 

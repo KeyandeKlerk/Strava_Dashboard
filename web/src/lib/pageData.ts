@@ -16,6 +16,7 @@ import {
   muscleGroupFrequency,
   muscleGroupWeeklyVolume,
   personalRecords,
+  pivotMuscleGroupVolume,
   weeklyGymVolume,
 } from "./gymMetrics";
 import {
@@ -53,6 +54,7 @@ import {
 } from "./metrics";
 import {
   BANDS,
+  addDaysToDateString,
   computeReadiness,
   computeTrainingStatus,
   danielsVo2max,
@@ -188,9 +190,8 @@ export async function getTodayPageData() {
 
     const current =
       weekSummary.find((w) => {
-        const start = w.week_start_date;
-        const end = new Date(new Date(`${start}T00:00:00`).getTime() + 7 * 86400000).toISOString().slice(0, 10);
-        return start <= today && today < end;
+        const end = addDaysToDateString(w.week_start_date, 7);
+        return w.week_start_date <= today && today < end;
       }) ?? weekSummary[0];
 
     const daily = await dailyPlanForWeek(conn, current.week_number);
@@ -315,9 +316,7 @@ export async function getPlanHistoryPageData() {
 
     const defaultWeek =
       weekSummary.find((w) => {
-        const end = new Date(new Date(`${w.week_start_date}T00:00:00`).getTime() + 7 * 86400000)
-          .toISOString()
-          .slice(0, 10);
+        const end = addDaysToDateString(w.week_start_date, 7);
         return w.week_start_date <= today && today < end;
       })?.week_number ?? weekSummary[0]?.week_number;
 
@@ -441,19 +440,7 @@ export async function getGymInsightsPageData() {
     const weeklyVolumeSorted = [...weeklyVolume].sort((a, b) => (a.week_start < b.week_start ? -1 : 1));
     const sessionsPerWeekSorted = [...sessionsPerWeek].sort((a, b) => (a.week_start < b.week_start ? -1 : 1));
 
-    // Pivot {week_start, muscle_group, total_volume_kg} rows into one row per
-    // week with a column per muscle group, since Recharts' stacked <Bar>
-    // needs one dataKey per series rather than a long/tidy row shape.
-    const muscleGroups = [...new Set(muscleVolume.map((v) => v.muscle_group))].sort();
-    const byWeek = new Map<string, Record<string, number>>();
-    for (const row of muscleVolume) {
-      const existing = byWeek.get(row.week_start) ?? {};
-      existing[row.muscle_group] = row.total_volume_kg;
-      byWeek.set(row.week_start, existing);
-    }
-    const muscleVolumePivoted = [...byWeek.entries()]
-      .sort(([a], [b]) => (a < b ? -1 : 1))
-      .map(([week_start, values]) => ({ week_start, ...values }));
+    const { muscleGroups, pivoted: muscleVolumePivoted } = pivotMuscleGroupVolume(muscleVolume);
 
     // Default "hero" exercise for the progression chart: the alphabetically
     // first exercise with any logged history (personalRecords only includes

@@ -3,6 +3,7 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestConnection } from "./db/testHelper";
+import { addDaysToDateString } from "./shared";
 import {
   upsertActivity,
   upsertStreamsDerived,
@@ -114,6 +115,19 @@ function daysAgo(n: number): string {
   return new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
 }
 
+// weeklyRampRate's "still in progress" substitution is CURRENT_DATE-relative
+// (DATE_TRUNC('week', ...) is Mon-Sun) — fixtures for that behavior must
+// anchor to the real current week, not a fixed calendar date.
+function mondayOfCurrentWeek(): string {
+  const now = new Date();
+  const isoWeekday = ((now.getDay() + 6) % 7) + 1; // Mon=1 .. Sun=7
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (isoWeekday - 1));
+  const yyyy = monday.getFullYear();
+  const mm = String(monday.getMonth() + 1).padStart(2, "0");
+  const dd = String(monday.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function rowForDay<T extends { day: string }>(rows: T[], dayStr: string): T {
   const matches = rows.filter((r) => r.day === dayStr);
   expect(matches.length, `expected exactly one row for ${dayStr}, found ${matches.length}`).toBe(1);
@@ -208,6 +222,24 @@ describe("acwrHistory", () => {
     const rows = await metrics.acwrHistory(conn);
     expect(rows.length).toBeGreaterThanOrEqual(1);
   });
+
+  it("sums load over trailing calendar days, not trailing activity rows, for an athlete who trains once a week", async () => {
+    // 8 weekly long runs, one every Monday — a normal once-a-week pattern.
+    // The 7-day window ending on the most recent run's day should contain
+    // only that run (the prior one is a full 7 days earlier, outside the
+    // "6 preceding days" window), not the last 7 *rows* (the last ~7 weeks).
+    const mondays = ["2026-01-05", "2026-01-12", "2026-01-19", "2026-01-26", "2026-02-02", "2026-02-09", "2026-02-16", "2026-02-23"];
+    for (let i = 0; i < mondays.length; i++) {
+      await insertRun(200 + i, `${mondays[i]}T07:00:00`, 15.0, { loadScore: 80.0 });
+    }
+
+    const rows = await metrics.acwrHistory(conn);
+    const last = rowForDay(rows, "2026-02-23");
+
+    expect(last.load_7d).toBe(80);
+    expect(last.load_28d).toBe(320);
+    approx(last.acwr!, 1.0);
+  });
 });
 
 describe("weeklyRampRate", () => {
@@ -228,12 +260,33 @@ describe("weeklyRampRate", () => {
     expect(row.ramp_pct).toBeNull();
   });
 
+  it("zero-fills a totally empty week (no activity of any kind) rather than skipping it", async () => {
+    await insertRun(1, "2026-01-05T07:00:00", 20.0); // week of 2026-01-05
+    // 2026-01-12: a completely empty week — no run, no gym, nothing.
+    await insertRun(2, "2026-01-19T07:00:00", 20.0); // week of 2026-01-19
+
+    const rows = await metrics.weeklyRampRate(conn);
+
+    const emptyWeek = rowForWeek(rows, "2026-01-12");
+    approx(emptyWeek.run_distance_km, 0);
+    approx(emptyWeek.prev_period_km, 20.0);
+
+    // The week after the gap compares against the empty week (0 km), not
+    // against the week before the gap — a 2-week-old run must not be read as
+    // "no change from last week."
+    const afterGap = rowForWeek(rows, "2026-01-19");
+    approx(afterGap.prev_period_km, 0);
+    expect(afterGap.ramp_pct).toBeNull();
+  });
+
   it("uses the plan's target distance for the still-in-progress current week, not partial actual", async () => {
-    await insertRun(1, "2026-07-13T07:00:00", 40.0); // completed prior week (2026-07-13 is a Monday)
-    await insertRun(2, "2026-07-21T07:00:00", 5.0); // this week (2026-07-20 is today, a Monday) — only 1 run so far
+    const thisWeekMonday = mondayOfCurrentWeek();
+    const priorWeekMonday = addDaysToDateString(thisWeekMonday, -7);
+    await insertRun(1, `${priorWeekMonday}T07:00:00`, 40.0); // completed prior week
+    await insertRun(2, `${thisWeekMonday}T07:00:00`, 5.0); // this (still in-progress) week — only 1 run so far
     await upsertTrainingPlanWeek(conn, {
       week_number: 1,
-      week_start_date: "2026-07-20",
+      week_start_date: thisWeekMonday,
       phase: "Build",
       planned_distance_km: 50.0,
       planned_long_run_km: 20.0,
@@ -242,17 +295,18 @@ describe("weeklyRampRate", () => {
     });
 
     const rows = await metrics.weeklyRampRate(conn);
-    const row = rowForWeek(rows, "2026-07-20");
+    const row = rowForWeek(rows, thisWeekMonday);
     approx(row.run_distance_km, 50.0); // planned, not the 5km logged so far
     approx(row.prev_period_km, 40.0);
     approx(row.ramp_pct as number, 25.0, 0.1);
   });
 
   it("falls back to partial actual for the current week when no plan exists", async () => {
-    await insertRun(1, "2026-07-13T07:00:00", 40.0);
-    await insertRun(2, "2026-07-21T07:00:00", 5.0);
+    const thisWeekMonday = mondayOfCurrentWeek();
+    await insertRun(1, `${addDaysToDateString(thisWeekMonday, -7)}T07:00:00`, 40.0);
+    await insertRun(2, `${thisWeekMonday}T07:00:00`, 5.0);
     const rows = await metrics.weeklyRampRate(conn);
-    const row = rowForWeek(rows, "2026-07-20");
+    const row = rowForWeek(rows, thisWeekMonday);
     approx(row.run_distance_km, 5.0);
   });
 });

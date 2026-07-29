@@ -129,6 +129,52 @@ export async function muscleGroupWeeklyVolume(conn: DuckDBConnection): Promise<M
   );
 }
 
+export interface PivotedMuscleGroupVolume {
+  muscleGroups: string[];
+  pivoted: Array<Record<string, string | number>>;
+}
+
+// Pivots {week_start, muscle_group, total_volume_kg} rows into one row per
+// week with a column per muscle group, for a stacked <Bar> per group (one
+// dataKey per series). The categorical palette this feeds is a fixed,
+// never-cycled set of maxGroups hues (see chartTheme.ts's SERIES) — beyond
+// that many distinct groups, a generated/repeated hue would make two
+// different series visually indistinguishable, so the lowest-volume groups
+// are folded into a single "Other" series instead of getting their own color.
+export function pivotMuscleGroupVolume(
+  rows: MuscleGroupWeeklyVolumeRow[],
+  maxGroups = 8,
+): PivotedMuscleGroupVolume {
+  const totalByGroup = new Map<string, number>();
+  for (const row of rows) {
+    totalByGroup.set(row.muscle_group, (totalByGroup.get(row.muscle_group) ?? 0) + row.total_volume_kg);
+  }
+  const allGroups = [...totalByGroup.keys()];
+
+  const kept = new Set(
+    allGroups.length > maxGroups
+      ? [...allGroups].sort((a, b) => totalByGroup.get(b)! - totalByGroup.get(a)!).slice(0, maxGroups - 1)
+      : allGroups,
+  );
+  const folded = allGroups.length > maxGroups;
+
+  const muscleGroups = [...kept].sort();
+  if (folded) muscleGroups.push("Other");
+
+  const byWeek = new Map<string, Record<string, number>>();
+  for (const row of rows) {
+    const existing = byWeek.get(row.week_start) ?? {};
+    const key = kept.has(row.muscle_group) ? row.muscle_group : "Other";
+    existing[key] = (existing[key] ?? 0) + row.total_volume_kg;
+    byWeek.set(row.week_start, existing);
+  }
+  const pivoted = [...byWeek.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([week_start, values]) => ({ week_start, ...values }));
+
+  return { muscleGroups, pivoted };
+}
+
 export interface GymSessionsPerWeekRow {
   week_start: string;
   session_count: number;

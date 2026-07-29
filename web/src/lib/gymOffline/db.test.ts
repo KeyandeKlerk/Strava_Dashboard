@@ -7,6 +7,9 @@ import {
   listExercisesCache,
   listLastPerformanceCache,
   listPlanCache,
+  listSessionsCache,
+  patchSessionCache,
+  putSessionCache,
   replaceLastPerformanceCache,
   replacePlanCache,
   resetGymOfflineDbForTests,
@@ -46,6 +49,32 @@ describe("planCache", () => {
     expect(await listPlanCache(db)).toEqual([
       { dayOfWeek: "Monday", entries: [{ exerciseId: 1, targetSets: 3, targetReps: 8, supersetGroup: 1 }] },
     ]);
+  });
+});
+
+describe("patchSessionCache", () => {
+  it("keeps both fields when two concurrent patches target the same session", async () => {
+    await putSessionCache(db, {
+      clientUuid: "sess-1",
+      id: null,
+      sessionDate: "2026-07-20",
+      startedAt: "2026-07-20T06:00:00.000Z",
+      endedAt: null,
+      activityId: null,
+      notes: null,
+    });
+
+    // e.g. a create_session sync response landing (patches `id`) at the same
+    // moment the user taps "End session" (patches `endedAt`).
+    await Promise.all([
+      patchSessionCache(db, "sess-1", { endedAt: "2026-07-20T07:00:00.000Z" }),
+      patchSessionCache(db, "sess-1", { id: 42 }),
+    ]);
+
+    const sessions = await listSessionsCache(db);
+    const session = sessions.find((s) => s.clientUuid === "sess-1");
+    expect(session?.id).toBe(42);
+    expect(session?.endedAt).toBe("2026-07-20T07:00:00.000Z");
   });
 });
 

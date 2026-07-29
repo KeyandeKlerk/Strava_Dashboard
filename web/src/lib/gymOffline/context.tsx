@@ -35,6 +35,7 @@ import {
   type CachedSet,
 } from "./db";
 import type { PlanEntryInput } from "@/lib/db/gymMutations";
+import { createCoalescedRunner } from "@/lib/coalescedRunner";
 import { flushQueue, type FlushResult } from "./queue";
 import { nextRestTimerPreset, readStoredRestSeconds, storeRestSeconds } from "@/lib/gymRestTimer";
 import { playRestTimerBeep } from "@/lib/gymRestTimerAudio";
@@ -104,7 +105,6 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
   const [pendingCount, setPendingCount] = useState(0);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [lastFlush, setLastFlush] = useState<FlushResult | null>(null);
-  const flushing = useRef(false);
   const placeholderCounter = useRef(0);
 
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
@@ -169,17 +169,19 @@ export function GymOfflineProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const flush = useCallback(async () => {
-    if (flushing.current) return;
-    flushing.current = true;
-    try {
+  // A flush() call that arrives while one is already in flight is coalesced
+  // into a guaranteed rerun once the current pass finishes, rather than
+  // silently no-op'ing — otherwise a mutation enqueued after the in-flight
+  // pass's snapshot was already taken would sit queued until some other
+  // external trigger (reconnect, tab-visibility change) happened to fire.
+  const flushRunner = useRef(
+    createCoalescedRunner(async () => {
       const result = await flushQueue();
       setLastFlush(result);
       await refresh();
-    } finally {
-      flushing.current = false;
-    }
-  }, [refresh]);
+    }),
+  );
+  const flush = useCallback(() => flushRunner.current(), []);
 
   const bootstrap = useCallback(async () => {
     if (typeof navigator !== "undefined" && !navigator.onLine) return;

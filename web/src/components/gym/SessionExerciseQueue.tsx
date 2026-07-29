@@ -59,11 +59,14 @@ export function SessionExerciseQueue({
       })
       .filter((e): e is QueueEntry => e != null);
     if (seededEntries.length > 0) {
+      // One-time seed from async-loaded plan data (not a derived-from-props
+      // recompute) — the `seeded` guard above makes this run at most once
+      // per mount, so it can't cascade into repeated renders.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQueueEntries(seededEntries);
       setCurrentKey(seededEntries[0].key);
     }
     setSeeded(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exercises, planByDay, planDayName, seeded]);
 
   const queueExercises = useMemo(

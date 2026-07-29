@@ -98,7 +98,7 @@ export const STATUS = {
 // a closure argument (not read from Recharts' per-point props, which don't
 // carry the series' `fill` through to a custom `shape`).
 export function scatterHitShape(fill: string, radius = 4) {
-  return ({ cx, cy }: { cx?: number; cy?: number }) => {
+  function ScatterHitShape({ cx, cy }: { cx?: number; cy?: number }) {
     if (cx == null || cy == null) return createElement("g", null);
     return createElement(
       "g",
@@ -106,5 +106,6 @@ export function scatterHitShape(fill: string, radius = 4) {
       createElement("circle", { cx, cy, r: 12, fill: "transparent" }),
       createElement("circle", { cx, cy, r: radius, fill }),
     );
-  };
+  }
+  return ScatterHitShape;
 }

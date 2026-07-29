@@ -67,6 +67,16 @@ export async function refreshRecentActivities(
 export async function runSync(conn: DuckDBConnection): Promise<{ processedCount: number }> {
   const lastSynced = await getLastSynced(conn);
 
+  // Captured before the fetch, not after all the processing below (upserts,
+  // race detection, gear refresh) — that work can take long enough for a new
+  // Strava activity to be created in the gap, and Strava's `after` filters on
+  // the activity's own start_date, so a watermark captured afterward would
+  // permanently skip it (it started before the watermark but wasn't fetched
+  // this round either). Capturing early means the next sync may redundantly
+  // re-fetch a couple of just-synced activities instead — harmless, since
+  // upsertActivity is idempotent.
+  const syncStartedTs = Math.floor(Date.now() / 1000);
+
   console.log(lastSynced ? `Fetching activities after ${lastSynced}...` : "Fetching activities (all time)...");
   const accessToken = await refreshAccessToken(conn);
   const rawActivities = await getActivities(accessToken, lastSynced);
@@ -103,8 +113,7 @@ export async function runSync(conn: DuckDBConnection): Promise<{ processedCount:
   // exactly the case that needs an unconditional refresh to be caught.
   await refreshGear(conn, accessToken, [...newActivities, ...refreshedActivities]);
 
-  const nowTs = Math.floor(Date.now() / 1000);
-  await setLastSynced(conn, nowTs);
+  await setLastSynced(conn, syncStartedTs);
   await correlateActivitiesToPlan(conn);
   await correlateGymSessionsToActivities(conn);
   console.log(`Sync complete. ${rawActivities.length} activities processed.`);

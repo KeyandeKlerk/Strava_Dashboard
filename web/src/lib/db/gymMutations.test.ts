@@ -1,6 +1,7 @@
-import type { DuckDBConnection } from "@duckdb/node-api";
+import { DuckDBConnection, DuckDBInstance } from "@duckdb/node-api";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestConnection } from "./testHelper";
+import { initSchema } from "./schema";
 import { queryRow, queryRows } from "./client";
 import { upsertActivity } from "./mutations";
 import {
@@ -80,6 +81,28 @@ describe("addCustomExercise", () => {
     const rows = await queryRows<{ count: number | bigint }>(
       conn,
       "SELECT COUNT(*) AS count FROM gym_exercises WHERE lower(name) = 'barbell bench press'",
+    );
+    expect(Number(rows[0].count)).toBe(1);
+  });
+
+  it("does not throw when two devices race to add the same new name concurrently", async () => {
+    // Two independent connections to the same in-memory database, so both
+    // addCustomExercise calls' initial "does this name exist" SELECT can
+    // genuinely race before either has inserted anything.
+    const instance = await DuckDBInstance.create(":memory:");
+    const connA = await instance.connect();
+    await initSchema((sql) => connA.run(sql));
+    const connB = await instance.connect();
+
+    const [a, b] = await Promise.all([
+      addCustomExercise(connA, { client_uuid: "dev-a", name: "Cable Pullover", muscle_group: "Lats" }),
+      addCustomExercise(connB, { client_uuid: "dev-b", name: "Cable Pullover", muscle_group: "Lats" }),
+    ]);
+
+    expect(a.id).toBe(b.id);
+    const rows = await queryRows<{ count: number | bigint }>(
+      connA,
+      "SELECT COUNT(*) AS count FROM gym_exercises WHERE lower(name) = 'cable pullover'",
     );
     expect(Number(rows[0].count)).toBe(1);
   });
@@ -416,6 +439,32 @@ describe("correlateGymSessionsToActivities", () => {
     const detail = await getGymSessionDetail(conn, session.id);
     expect(detail?.activity_id).toBeNull();
   });
+
+  it("pairs two same-day sessions to two distinct same-day activities, not both to one", async () => {
+    await upsertActivity(conn, {
+      id: 9003,
+      name: "AM Gym",
+      category: "gym",
+      start_date_local: "2026-07-23T06:00:00",
+    });
+    await upsertActivity(conn, {
+      id: 9004,
+      name: "PM Gym",
+      category: "gym",
+      start_date_local: "2026-07-23T18:00:00",
+    });
+    const morning = await upsertGymSession(conn, { client_uuid: "sess-13", session_date: "2026-07-23" });
+    const evening = await upsertGymSession(conn, { client_uuid: "sess-14", session_date: "2026-07-23" });
+
+    await correlateGymSessionsToActivities(conn);
+
+    const morningDetail = await getGymSessionDetail(conn, morning.id);
+    const eveningDetail = await getGymSessionDetail(conn, evening.id);
+    expect(morningDetail?.activity_id).not.toBeNull();
+    expect(eveningDetail?.activity_id).not.toBeNull();
+    expect(morningDetail?.activity_id).not.toBe(eveningDetail?.activity_id);
+    expect([morningDetail?.activity_id, eveningDetail?.activity_id].sort()).toEqual([9003, 9004]);
+  });
 });
 
 describe("getLastPerformanceByExercise", () => {
@@ -551,6 +600,23 @@ describe("getWeeklyPlan / setPlanForDay", () => {
     expect(plan["Monday"].map((e) => e.name)).toEqual(["Barbell Curl"]);
     // The replaced row's old targets don't linger.
     expect(plan["Monday"][0].target_sets).toBeNull();
+  });
+
+  it("rolls back to the prior plan if an insert fails partway through the list", async () => {
+    const exercises = await listGymExercises(conn);
+    const squat = exercises.find((e) => e.name === "Barbell Back Squat")!;
+    const legPress = exercises.find((e) => e.name === "Leg Press")!;
+
+    await setPlanForDay(conn, "Monday", [entry(squat.id)]);
+
+    // The second entry's exercise_id is invalid (NOT NULL violation),
+    // simulating a mid-loop failure after the first insert has already run.
+    await expect(
+      setPlanForDay(conn, "Monday", [entry(legPress.id), entry(null as unknown as number)]),
+    ).rejects.toThrow();
+
+    const plan = await getWeeklyPlan(conn);
+    expect(plan["Monday"]?.map((e) => e.name)).toEqual(["Barbell Back Squat"]);
   });
 
   it("leaves other days untouched", async () => {

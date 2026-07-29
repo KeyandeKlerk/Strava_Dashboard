@@ -213,10 +213,17 @@ export async function putSessionCache(db: GymOfflineDb, session: CachedSession):
   await db.put("sessionsCache", session);
 }
 
+// One transaction, not separate get+put calls — IndexedDB serializes
+// overlapping readwrite transactions on the same store, so this is atomic
+// against a concurrent patch to the same session (e.g. a sync response
+// patching `id` at the same moment the user ends the session, patching
+// `endedAt`); two independent get-then-put calls are not atomic and can
+// silently drop whichever field's put lands first.
 export async function patchSessionCache(db: GymOfflineDb, clientUuid: string, patch: Partial<CachedSession>): Promise<void> {
-  const existing = await db.get("sessionsCache", clientUuid);
-  if (!existing) return;
-  await db.put("sessionsCache", { ...existing, ...patch });
+  const tx = db.transaction("sessionsCache", "readwrite");
+  const existing = await tx.store.get(clientUuid);
+  if (existing) await tx.store.put({ ...existing, ...patch });
+  await tx.done;
 }
 
 export async function listSessionsCache(db: GymOfflineDb): Promise<CachedSession[]> {

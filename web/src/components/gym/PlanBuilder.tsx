@@ -1,5 +1,5 @@
 "use client";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { addCustomExerciseAction, setPlanForDayAction } from "@/lib/gymActions";
 import { MUSCLE_GROUPS } from "@/lib/db/gymExerciseSeed";
 import {
@@ -8,6 +8,7 @@ import {
   isContiguousSelection,
   normalizeGroups,
 } from "@/lib/gymSupersets";
+import { createSerialQueue } from "@/lib/serialQueue";
 import { FIELD_CLASS, TAP_TARGET_CLASS } from "@/lib/uiStyles";
 import type { GymExerciseRow, PlanExerciseRow } from "@/lib/db/gymMutations";
 
@@ -121,6 +122,13 @@ export function PlanBuilder({
   // Exercise ids checked for "Group selected" (by gym_exercises id, unique per
   // day). Cleared on day switch and after any grouping change.
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const persistQueue = useRef(createSerialQueue());
+  // Seeded above any superset_group id already present anywhere in the
+  // initial plan, so a freshly assigned id can never collide with an
+  // existing group elsewhere in the (unrelated) day lists.
+  const groupIdCounter = useRef(
+    Math.max(0, ...Object.values(initialPlan).flatMap((rows) => rows.map((r) => r.superset_group ?? 0))),
+  );
 
   const dayExercises = plan[selectedDay] ?? [];
   const items = buildPlanItems(dayExercises);
@@ -129,17 +137,15 @@ export function PlanBuilder({
     selectedIds,
   );
 
-  async function persist(day: string, dayExercises: PlanExerciseRow[]) {
+  function persist(day: string, dayExercises: PlanExerciseRow[]) {
     setPlan((prev) => ({ ...prev, [day]: dayExercises }));
-    await setPlanForDayAction(
-      day,
-      dayExercises.map((e) => ({
-        exerciseId: e.id,
-        targetSets: e.target_sets,
-        targetReps: e.target_reps,
-        supersetGroup: e.superset_group,
-      })),
-    );
+    const entries = dayExercises.map((e) => ({
+      exerciseId: e.id,
+      targetSets: e.target_sets,
+      targetReps: e.target_reps,
+      supersetGroup: e.superset_group,
+    }));
+    persistQueue.current.enqueue(() => setPlanForDayAction(day, entries));
   }
 
   // Reorder ITEMS (solos + collapsed groups), not raw exercises. The same
@@ -158,12 +164,11 @@ export function PlanBuilder({
     persist(selectedDay, normalizeGroups(dayExercises.filter((_, i) => i !== index)));
   }
 
-  // Tag the (already-contiguous) selected exercises with a fresh opaque group
-  // id. Date.now() is fine — the group id is opaque and the whole day list is
-  // replaced wholesale on every persist, so there's no max to scan for.
+  // Tag the (already-contiguous) selected exercises with a fresh opaque group id.
   function groupSelected() {
     if (!canGroup) return;
-    const groupId = Date.now();
+    groupIdCounter.current += 1;
+    const groupId = groupIdCounter.current;
     const next = normalizeGroups(
       dayExercises.map((e) => (selectedIds.has(e.id) ? { ...e, superset_group: groupId } : e)),
     );

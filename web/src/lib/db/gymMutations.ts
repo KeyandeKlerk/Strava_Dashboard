@@ -45,24 +45,39 @@ export async function addCustomExercise(
   );
   if (existing) return existing;
 
-  await conn.run(
-    `INSERT INTO gym_exercises (client_uuid, name, muscle_group, equipment, is_custom)
-     VALUES ($client_uuid, $name, $muscle_group, $equipment, TRUE)
-     ON CONFLICT (client_uuid) DO NOTHING`,
-    {
-      client_uuid: input.client_uuid,
-      name: input.name,
-      muscle_group: input.muscle_group,
-      equipment: input.equipment ?? null,
-    },
-  );
+  // Two callers racing this same read-then-write for a not-yet-existing name
+  // (see gymMutations.test.ts's concurrency test) can both pass the read
+  // check above before either commits. DuckDB's MVCC then surfaces the
+  // loser's insert as a commit-time transaction conflict, not a statement-
+  // level constraint violation ON CONFLICT could suppress — so on any insert
+  // failure, re-check by name and adopt whichever row won instead of failing.
+  let insertError: unknown;
+  try {
+    await conn.run(
+      `INSERT INTO gym_exercises (client_uuid, name, muscle_group, equipment, is_custom)
+       VALUES ($client_uuid, $name, $muscle_group, $equipment, TRUE)
+       ON CONFLICT DO NOTHING`,
+      {
+        client_uuid: input.client_uuid,
+        name: input.name,
+        muscle_group: input.muscle_group,
+        equipment: input.equipment ?? null,
+      },
+    );
+  } catch (err) {
+    insertError = err;
+  }
 
+  // Re-fetch by name rather than client_uuid: if the insert above lost a
+  // race, the winning row belongs to a different client_uuid and this is the
+  // only lookup guaranteed to still find it.
   const row = await queryRow<{ id: number; client_uuid: string | null }>(
     conn,
-    "SELECT id, client_uuid FROM gym_exercises WHERE client_uuid = $client_uuid",
-    { client_uuid: input.client_uuid },
+    "SELECT id, client_uuid FROM gym_exercises WHERE lower(name) = lower($name)",
+    { name: input.name },
   );
-  return row!;
+  if (row) return row;
+  throw insertError;
 }
 
 export interface UpsertGymSessionInput {
@@ -279,18 +294,33 @@ export async function listRecentGymSessions(conn: DuckDBConnection, n = 15): Pro
 // activity. Safe to call repeatedly/as a no-op — only touches sessions with
 // activity_id still NULL.
 export async function correlateGymSessionsToActivities(conn: DuckDBConnection): Promise<number> {
+  // Pairs the nth-oldest unclaimed session on a date with the nth-oldest
+  // unclaimed activity on that date (not just "the" unclaimed activity for
+  // the date) — otherwise two same-day sessions (e.g. an AM and PM lift)
+  // both matched to a single MIN(id) activity would collapse onto the same
+  // activity_id, making one of them unreachable via getGymSessionByActivityId.
   await conn.run(`
     UPDATE gym_sessions s
-    SET activity_id = a.id
+    SET activity_id = pairing.activity_id
     FROM (
-        SELECT start_date_local::DATE AS gym_date, MIN(id) AS id
-        FROM activities
-        WHERE category = 'gym'
-          AND id NOT IN (SELECT activity_id FROM gym_sessions WHERE activity_id IS NOT NULL)
-        GROUP BY 1
-    ) a
-    WHERE s.activity_id IS NULL
-      AND s.session_date = a.gym_date
+        WITH unclaimed_sessions AS (
+            SELECT id, session_date,
+                   ROW_NUMBER() OVER (PARTITION BY session_date ORDER BY id) AS rn
+            FROM gym_sessions
+            WHERE activity_id IS NULL
+        ),
+        unclaimed_activities AS (
+            SELECT id AS activity_id, start_date_local::DATE AS gym_date,
+                   ROW_NUMBER() OVER (PARTITION BY start_date_local::DATE ORDER BY id) AS rn
+            FROM activities
+            WHERE category = 'gym'
+              AND id NOT IN (SELECT activity_id FROM gym_sessions WHERE activity_id IS NOT NULL)
+        )
+        SELECT us.id AS session_id, ua.activity_id
+        FROM unclaimed_sessions us
+        JOIN unclaimed_activities ua ON ua.gym_date = us.session_date AND ua.rn = us.rn
+    ) pairing
+    WHERE s.id = pairing.session_id
   `);
 
   const row = await queryRow<{ count: number | bigint }>(
@@ -417,20 +447,27 @@ export async function setPlanForDay(
   dayOfWeek: string,
   entries: PlanEntryInput[],
 ): Promise<void> {
-  await conn.run("DELETE FROM gym_plan_exercises WHERE day_of_week = $day", { day: dayOfWeek });
-  for (let i = 0; i < entries.length; i++) {
-    const e = entries[i];
-    await conn.run(
-      `INSERT INTO gym_plan_exercises (day_of_week, exercise_id, position, target_sets, target_reps, superset_group)
-       VALUES ($day, $exercise_id, $position, $target_sets, $target_reps, $superset_group)`,
-      {
-        day: dayOfWeek,
-        exercise_id: e.exerciseId,
-        position: i,
-        target_sets: e.targetSets,
-        target_reps: e.targetReps,
-        superset_group: e.supersetGroup,
-      },
-    );
+  await conn.run("BEGIN TRANSACTION");
+  try {
+    await conn.run("DELETE FROM gym_plan_exercises WHERE day_of_week = $day", { day: dayOfWeek });
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      await conn.run(
+        `INSERT INTO gym_plan_exercises (day_of_week, exercise_id, position, target_sets, target_reps, superset_group)
+         VALUES ($day, $exercise_id, $position, $target_sets, $target_reps, $superset_group)`,
+        {
+          day: dayOfWeek,
+          exercise_id: e.exerciseId,
+          position: i,
+          target_sets: e.targetSets,
+          target_reps: e.targetReps,
+          superset_group: e.supersetGroup,
+        },
+      );
+    }
+    await conn.run("COMMIT");
+  } catch (err) {
+    await conn.run("ROLLBACK");
+    throw err;
   }
 }
